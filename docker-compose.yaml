@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: xml-benchmark-postgres
+    environment:
+      POSTGRES_DB: xml_benchmark
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

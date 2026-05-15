@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: xml-workflow-search-benchmark
+
+  datasource:
+    url: jdbc:postgresql://localhost:5434/xml_benchmark
+    username: postgres
+    password: postgres
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8080
