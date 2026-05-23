@@ -11,5 +11,21 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.4
+    container_name: xml-benchmark-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - "9201:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+
 volumes:
   postgres-data:
+  elasticsearch-data:
+
+
+
