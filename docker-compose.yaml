@@ -23,9 +23,39 @@ services:
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
 
+  opensearch:
+    image: opensearchproject/opensearch:2.17.1
+    container_name: xml-benchmark-opensearch
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=Admin123!
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+
+  solr:
+    image: solr:9.7
+    container_name: xml-benchmark-solr
+    environment:
+      - SOLR_JAVA_MEM=-Xms1g -Xmx1g
+    ports:
+      - "8983:8983"
+    volumes:
+      - solr-data:/var/solr
+    command:
+      - solr-precreate
+      - workflow-documents
+
 volumes:
   postgres-data:
   elasticsearch-data:
+  opensearch-data:
+  solr-data:
+
+
 
 
 

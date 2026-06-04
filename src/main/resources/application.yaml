@@ -23,5 +23,19 @@ search:
     base-url: http://localhost:9201
     index-name: workflow-documents
 
+  opensearch:
+    base-url: http://localhost:9200
+    index-name: workflow-documents
+
+  solr:
+    base-url: http://localhost:8983/solr
+    collection-name: workflow-documents
+
+
+
+
+
+
+
 
 
