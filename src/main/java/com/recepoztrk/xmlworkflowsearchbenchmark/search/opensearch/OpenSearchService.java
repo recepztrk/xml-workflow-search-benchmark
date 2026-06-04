@@ -1,10 +1,11 @@
 package com.recepoztrk.xmlworkflowsearchbenchmark.search.opensearch;
 
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.IndexOperationResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchEngineResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchHitDto;
-import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchMode;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.entity.WorkflowDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.repository.WorkflowDocumentRepository;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.service.WorkflowXmlParser;
@@ -15,14 +16,23 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * OpenSearch alternatif arama motoru entegrasyon servisi.
  *
- * Bu servis ElasticsearchService ile bilinçli olarak benzer yapıdadır.
- * Çünkü benchmarkta Elasticsearch ve OpenSearch'ü mümkün olduğunca aynı veri modeli,
- * aynı mapping mantığı ve aynı query yaklaşımıyla karşılaştırmak istiyoruz.
+ * RAW_XML:
+ * - Mevcut sistem yaklaşımına yakındır.
+ * - XML parse edilmeden xmlContent alanına indexlenir.
+ * - Arama doğrudan xmlContent üzerinde yapılır.
+ *
+ * EXTRACTED_DOCUMENT:
+ * - XML parse edilir.
+ * - SearchDocument alanları OpenSearch'e aktarılır.
+ * - Arama workflowName, screenTitles, descriptions, actions ve searchText gibi alanlarda yapılır.
  */
 @Service
 public class OpenSearchService implements SearchEngineClient {
@@ -62,10 +72,15 @@ public class OpenSearchService implements SearchEngineClient {
                 .body(String.class);
     }
 
-    public void recreateIndex() {
+    /**
+     * Seçilen moda göre OpenSearch indexini sıfırdan oluşturur.
+     */
+    public void recreateIndex(SearchMode mode) {
+        SearchMode effectiveMode = mode == null ? SearchMode.RAW_XML : mode;
+
         deleteIndexIfExists();
 
-        Map<String, Object> requestBody = createIndexMapping();
+        Map<String, Object> requestBody = createIndexMapping(effectiveMode);
 
         restClient.put()
                 .uri("/{indexName}", indexName)
@@ -74,14 +89,24 @@ public class OpenSearchService implements SearchEngineClient {
                 .toBodilessEntity();
     }
 
-    public IndexOperationResult reindexAll() {
-        recreateIndex();
+    /**
+     * PostgreSQL'deki workflow kayıtlarını seçilen moda göre OpenSearch'e indexler.
+     */
+    @Override
+    public IndexOperationResult reindexAll(SearchMode mode) {
+        SearchMode effectiveMode = mode == null ? SearchMode.RAW_XML : mode;
+
+        recreateIndex(effectiveMode);
 
         List<WorkflowDocument> documents = workflowRepository.findAll();
 
         for (WorkflowDocument workflowDocument : documents) {
-            SearchDocument searchDocument = xmlParser.parse(workflowDocument);
-            indexDocument(searchDocument);
+            if (effectiveMode == SearchMode.RAW_XML) {
+                indexRawDocument(workflowDocument);
+            } else {
+                SearchDocument searchDocument = xmlParser.parse(workflowDocument);
+                indexExtractedDocument(searchDocument);
+            }
         }
 
         refreshIndex();
@@ -90,12 +115,20 @@ public class OpenSearchService implements SearchEngineClient {
                 ENGINE_NAME,
                 indexName,
                 documents.size(),
-                "All workflow documents indexed into OpenSearch successfully."
+                "All workflow documents indexed into OpenSearch successfully. mode=" + effectiveMode
         );
     }
 
-    public SearchEngineResult search(String query, int limit) {
-        Map<String, Object> requestBody = createSearchRequest(query, limit);
+    /**
+     * Seçilen moda göre OpenSearch üzerinde full-text search çalıştırır.
+     */
+    @Override
+    public SearchEngineResult search(String query, int limit, SearchMode mode) {
+        SearchMode effectiveMode = mode == null ? SearchMode.RAW_XML : mode;
+
+        Map<String, Object> requestBody = effectiveMode == SearchMode.RAW_XML
+                ? createRawXmlSearchRequest(query, limit)
+                : createExtractedSearchRequest(query, limit);
 
         long startNs = System.nanoTime();
 
@@ -110,7 +143,10 @@ public class OpenSearchService implements SearchEngineClient {
         return parseSearchResponse(query, tookMs, responseBody);
     }
 
-    private void indexDocument(SearchDocument document) {
+    /**
+     * EXTRACTED_DOCUMENT modu için parse edilmiş SearchDocument indexleme.
+     */
+    private void indexExtractedDocument(SearchDocument document) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("id", document.id());
         body.put("databaseId", document.databaseId());
@@ -128,6 +164,27 @@ public class OpenSearchService implements SearchEngineClient {
 
         restClient.put()
                 .uri("/{indexName}/_doc/{id}", indexName, document.id())
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    /**
+     * RAW_XML modu için ham XML indexleme.
+     */
+    private void indexRawDocument(WorkflowDocument document) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id", String.valueOf(document.getId()));
+        body.put("databaseId", document.getId());
+        body.put("workflowCode", document.getWorkflowCode());
+        body.put("workflowName", document.getWorkflowName());
+        body.put("status", document.getStatus());
+        body.put("domain", document.getDomain());
+        body.put("xmlContent", document.getXmlContent());
+        body.put("xmlSizeKb", document.getXmlSizeKb());
+
+        restClient.put()
+                .uri("/{indexName}/_doc/{id}", indexName, document.getId())
                 .body(body)
                 .retrieve()
                 .toBodilessEntity();
@@ -151,7 +208,17 @@ public class OpenSearchService implements SearchEngineClient {
                 .toBodilessEntity();
     }
 
-    private Map<String, Object> createIndexMapping() {
+    /**
+     * Moda göre OpenSearch mapping oluşturur.
+     *
+     * RAW_XML:
+     * - xmlContent indexlenir.
+     *
+     * EXTRACTED_DOCUMENT:
+     * - Parse edilmiş alanlar indexlenir.
+     * - xmlContent _source içinde saklanır ama search indexine dahil edilmez.
+     */
+    private Map<String, Object> createIndexMapping(SearchMode mode) {
         Map<String, Object> properties = new LinkedHashMap<>();
 
         properties.put("id", keywordField());
@@ -160,21 +227,22 @@ public class OpenSearchService implements SearchEngineClient {
         properties.put("workflowName", textField());
         properties.put("status", keywordField());
         properties.put("domain", keywordField());
-        properties.put("screenTitles", textField());
-        properties.put("screenDescriptions", textField());
-        properties.put("actionTexts", textField());
-        properties.put("technicalTokens", keywordField());
-        properties.put("searchText", textField());
         properties.put("xmlSizeKb", integerField());
 
-        /*
-         * xmlContent _source içinde saklanır ama indexlenmez.
-         * Böylece extracted searchText senaryosunda büyük XML indexi gereksiz şişirmez.
-         */
-        Map<String, Object> xmlContentField = new LinkedHashMap<>();
-        xmlContentField.put("type", "text");
-        xmlContentField.put("index", false);
-        properties.put("xmlContent", xmlContentField);
+        if (mode == SearchMode.EXTRACTED_DOCUMENT) {
+            properties.put("screenTitles", textField());
+            properties.put("screenDescriptions", textField());
+            properties.put("actionTexts", textField());
+            properties.put("technicalTokens", keywordField());
+            properties.put("searchText", textField());
+
+            Map<String, Object> xmlContentField = new LinkedHashMap<>();
+            xmlContentField.put("type", "text");
+            xmlContentField.put("index", false);
+            properties.put("xmlContent", xmlContentField);
+        } else {
+            properties.put("xmlContent", textField());
+        }
 
         return Map.of(
                 "mappings", Map.of(
@@ -183,7 +251,10 @@ public class OpenSearchService implements SearchEngineClient {
         );
     }
 
-    private Map<String, Object> createSearchRequest(String query, int limit) {
+    /**
+     * EXTRACTED_DOCUMENT arama isteği.
+     */
+    private Map<String, Object> createExtractedSearchRequest(String query, int limit) {
         return Map.of(
                 "size", limit,
                 "_source", List.of(
@@ -208,6 +279,42 @@ public class OpenSearchService implements SearchEngineClient {
                                                                 "actionTexts",
                                                                 "searchText"
                                                         )
+                                                )
+                                        )
+                                ),
+                                "filter", List.of(
+                                        Map.of(
+                                                "term", Map.of(
+                                                        "status", "ACTIVE"
+                                                )
+                                        )
+                                )
+                        )
+                )
+        );
+    }
+
+    /**
+     * RAW_XML arama isteği.
+     */
+    private Map<String, Object> createRawXmlSearchRequest(String query, int limit) {
+        return Map.of(
+                "size", limit,
+                "_source", List.of(
+                        "id",
+                        "databaseId",
+                        "workflowCode",
+                        "workflowName",
+                        "status",
+                        "domain",
+                        "xmlSizeKb"
+                ),
+                "query", Map.of(
+                        "bool", Map.of(
+                                "must", List.of(
+                                        Map.of(
+                                                "match", Map.of(
+                                                        "xmlContent", query
                                                 )
                                         )
                                 ),

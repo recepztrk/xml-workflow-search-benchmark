@@ -7,6 +7,7 @@ import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model.BenchmarkRunRes
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.IndexOperationResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchEngineResult;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchMode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +32,7 @@ public class BenchmarkService {
     private static final int DEFAULT_LIMIT = 5;
     private static final int DEFAULT_WARMUP_ITERATIONS = 5;
     private static final int DEFAULT_MEASUREMENT_ITERATIONS = 30;
+    private static final SearchMode DEFAULT_SEARCH_MODE = SearchMode.RAW_XML;
 
     private static final List<String> DEFAULT_QUERIES = List.of(
             "fatura itiraz",
@@ -50,8 +52,14 @@ public class BenchmarkService {
     }
 
     public BenchmarkReindexResponse reindexAll() {
+        return reindexAll(DEFAULT_SEARCH_MODE);
+    }
+
+    public BenchmarkReindexResponse reindexAll(SearchMode mode) {
+        SearchMode effectiveMode = mode == null ? DEFAULT_SEARCH_MODE : mode;
+
         List<IndexOperationResult> results = searchEngineClients.stream()
-                .map(SearchEngineClient::reindexAll)
+                .map(client -> client.reindexAll(effectiveMode))
                 .toList();
 
         return new BenchmarkReindexResponse(
@@ -78,7 +86,8 @@ public class BenchmarkService {
                         query,
                         limit,
                         warmupIterations,
-                        measurementIterations
+                        measurementIterations,
+                        normalizedRequest.mode()
                 );
 
                 results.add(measurementResult);
@@ -92,6 +101,7 @@ public class BenchmarkService {
                 limit,
                 warmupIterations,
                 measurementIterations,
+                normalizedRequest.mode(),
                 results
         );
     }
@@ -101,7 +111,8 @@ public class BenchmarkService {
             String query,
             int limit,
             int warmupIterations,
-            int measurementIterations
+            int measurementIterations,
+            SearchMode mode
     ) {
         /*
          * Warm-up:
@@ -110,7 +121,7 @@ public class BenchmarkService {
          */
         for (int i = 0; i < warmupIterations; i++) {
             try {
-                client.search(query, limit);
+                client.search(query, limit, mode);
             } catch (Exception ignored) {
                 // Warm-up hataları ölçüme dahil edilmiyor.
             }
@@ -122,7 +133,7 @@ public class BenchmarkService {
 
         for (int i = 0; i < measurementIterations; i++) {
             try {
-                SearchEngineResult result = client.search(query, limit);
+                SearchEngineResult result = client.search(query, limit, mode);
                 samples.add(result.tookMs());
                 lastHitCount = result.hitCount();
             } catch (Exception exception) {
@@ -188,7 +199,8 @@ public class BenchmarkService {
                     DEFAULT_QUERIES,
                     DEFAULT_LIMIT,
                     DEFAULT_WARMUP_ITERATIONS,
-                    DEFAULT_MEASUREMENT_ITERATIONS
+                    DEFAULT_MEASUREMENT_ITERATIONS,
+                    DEFAULT_SEARCH_MODE
             );
         }
 
@@ -211,12 +223,17 @@ public class BenchmarkService {
                 ? DEFAULT_MEASUREMENT_ITERATIONS
                 : request.measurementIterations();
 
+        SearchMode mode = request.mode() == null
+                ? DEFAULT_SEARCH_MODE
+                : request.mode();
+
         return new BenchmarkRunRequest(
                 engines,
                 queries,
                 limit,
                 warmupIterations,
-                measurementIterations
+                measurementIterations,
+                mode
         );
     }
 

@@ -4,6 +4,7 @@ import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model.BenchmarkReinde
 import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model.BenchmarkRunRequest;
 import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model.BenchmarkRunResponse;
 import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.service.BenchmarkService;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchMode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,8 +36,10 @@ public class BenchmarkController {
      * POST /api/benchmark/reindex-all
      */
     @PostMapping("/reindex-all")
-    public BenchmarkReindexResponse reindexAll() {
-        return benchmarkService.reindexAll();
+    public BenchmarkReindexResponse reindexAll(
+            @RequestParam(defaultValue = "RAW_XML") SearchMode mode
+    ) {
+        return benchmarkService.reindexAll(mode);
     }
 
     /**

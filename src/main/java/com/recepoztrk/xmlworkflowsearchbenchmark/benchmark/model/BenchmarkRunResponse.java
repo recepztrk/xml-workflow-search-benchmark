@@ -1,5 +1,7 @@
 package com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model;
 
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchMode;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -13,6 +15,7 @@ public record BenchmarkRunResponse(
         int limit,
         int warmupIterations,
         int measurementIterations,
+        SearchMode mode,
         List<BenchmarkMeasurementResult> results
 ) {
 }

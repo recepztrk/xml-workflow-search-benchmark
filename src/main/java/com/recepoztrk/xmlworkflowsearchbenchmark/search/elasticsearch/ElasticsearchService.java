@@ -1,13 +1,11 @@
 package com.recepoztrk.xmlworkflowsearchbenchmark.search.elasticsearch;
 
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.IndexOperationResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchEngineResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchHitDto;
-import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchMode;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.entity.WorkflowDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.repository.WorkflowDocumentRepository;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.service.WorkflowXmlParser;
@@ -15,19 +13,26 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Elasticsearch baseline entegrasyon servisi.
  *
- * Bu servis şimdilik üç temel iş yapar:
- * 1. Elasticsearch indexini oluşturur.
- * 2. PostgreSQL'deki workflow kayıtlarını SearchDocument'a çevirip Elasticsearch'e indexler.
- * 3. Elasticsearch üzerinde full-text search çalıştırır.
+ * RAW_XML:
+ * - Mevcut sistem yaklaşımına yakındır.
+ * - XML parse edilmeden xmlContent alanına indexlenir.
+ * - Arama doğrudan xmlContent üzerinde yapılır.
  *
- * Not:
- * Bu aşama benchmark değildir. Bu aşama sadece Elasticsearch baseline'ın çalışır hale getirilmesidir.
+ * EXTRACTED_DOCUMENT:
+ * - XML parse edilir.
+ * - SearchDocument alanları Elasticsearch'e aktarılır.
+ * - Arama workflowName, screenTitles, descriptions, actions ve searchText gibi alanlarda yapılır.
  */
 @Service
 public class ElasticsearchService implements SearchEngineClient {
@@ -43,13 +48,12 @@ public class ElasticsearchService implements SearchEngineClient {
     public ElasticsearchService(
             WorkflowDocumentRepository workflowRepository,
             WorkflowXmlParser xmlParser,
-            JsonMapper jsonMapper,
             @Value("${search.elasticsearch.base-url}") String baseUrl,
             @Value("${search.elasticsearch.index-name}") String indexName
     ) {
         this.workflowRepository = workflowRepository;
         this.xmlParser = xmlParser;
-        this.jsonMapper = jsonMapper;
+        this.jsonMapper = JsonMapper.builder().build();
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
                 .build();
@@ -72,18 +76,14 @@ public class ElasticsearchService implements SearchEngineClient {
     }
 
     /**
-     * Indexi sıfırdan oluşturur.
-     *
-     * Şimdilik xmlContent alanını _source içinde tutuyoruz ama indexlemiyoruz.
-     * Bunun sebebi:
-     * - Extracted SearchDocument yaklaşımını ana senaryo olarak kullanmak.
-     * - Büyük XML'in text indexini şişirmesini engellemek.
-     * - İleride full XML response maliyetini test edebilmek.
+     * Seçilen moda göre indexi sıfırdan oluşturur.
      */
-    public void recreateIndex() {
+    public void recreateIndex(SearchMode mode) {
+        SearchMode effectiveMode = mode == null ? SearchMode.RAW_XML : mode;
+
         deleteIndexIfExists();
 
-        Map<String, Object> requestBody = createIndexMapping();
+        Map<String, Object> requestBody = createIndexMapping(effectiveMode);
 
         restClient.put()
                 .uri("/{indexName}", indexName)
@@ -93,16 +93,23 @@ public class ElasticsearchService implements SearchEngineClient {
     }
 
     /**
-     * PostgreSQL'deki tüm workflow kayıtlarını Elasticsearch'e indexler.
+     * PostgreSQL'deki tüm workflow kayıtlarını seçilen moda göre Elasticsearch'e indexler.
      */
-    public IndexOperationResult reindexAll() {
-        recreateIndex();
+    @Override
+    public IndexOperationResult reindexAll(SearchMode mode) {
+        SearchMode effectiveMode = mode == null ? SearchMode.RAW_XML : mode;
+
+        recreateIndex(effectiveMode);
 
         List<WorkflowDocument> documents = workflowRepository.findAll();
 
         for (WorkflowDocument workflowDocument : documents) {
-            SearchDocument searchDocument = xmlParser.parse(workflowDocument);
-            indexDocument(searchDocument);
+            if (effectiveMode == SearchMode.RAW_XML) {
+                indexRawDocument(workflowDocument);
+            } else {
+                SearchDocument searchDocument = xmlParser.parse(workflowDocument);
+                indexExtractedDocument(searchDocument);
+            }
         }
 
         refreshIndex();
@@ -111,23 +118,20 @@ public class ElasticsearchService implements SearchEngineClient {
                 ENGINE_NAME,
                 indexName,
                 documents.size(),
-                "All workflow documents indexed into Elasticsearch successfully."
+                "All workflow documents indexed into Elasticsearch successfully. mode=" + effectiveMode
         );
     }
 
     /**
-     * Elasticsearch üzerinde basit multi-field full-text search çalıştırır.
-     *
-     * Burada multi_match kullanıyoruz:
-     * - workflowName daha yüksek ağırlık alıyor.
-     * - screenTitles ikinci öncelikte.
-     * - açıklama/action/searchText alanları normal ağırlıkta.
-     *
-     * Elasticsearch multi_match query birden fazla field üzerinde arama yapmayı ve field boost
-     * kullanımını destekler.
+     * Seçilen moda göre Elasticsearch üzerinde full-text search çalıştırır.
      */
-    public SearchEngineResult search(String query, int limit) {
-        Map<String, Object> requestBody = createSearchRequest(query, limit);
+    @Override
+    public SearchEngineResult search(String query, int limit, SearchMode mode) {
+        SearchMode effectiveMode = mode == null ? SearchMode.RAW_XML : mode;
+
+        Map<String, Object> requestBody = effectiveMode == SearchMode.RAW_XML
+                ? createRawXmlSearchRequest(query, limit)
+                : createExtractedSearchRequest(query, limit);
 
         long startNs = System.nanoTime();
 
@@ -142,7 +146,10 @@ public class ElasticsearchService implements SearchEngineClient {
         return parseSearchResponse(query, tookMs, responseBody);
     }
 
-    private void indexDocument(SearchDocument document) {
+    /**
+     * EXTRACTED_DOCUMENT modu için parse edilmiş SearchDocument indexleme.
+     */
+    private void indexExtractedDocument(SearchDocument document) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("id", document.id());
         body.put("databaseId", document.databaseId());
@@ -160,6 +167,27 @@ public class ElasticsearchService implements SearchEngineClient {
 
         restClient.put()
                 .uri("/{indexName}/_doc/{id}", indexName, document.id())
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    /**
+     * RAW_XML modu için ham XML indexleme.
+     */
+    private void indexRawDocument(WorkflowDocument document) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id", String.valueOf(document.getId()));
+        body.put("databaseId", document.getId());
+        body.put("workflowCode", document.getWorkflowCode());
+        body.put("workflowName", document.getWorkflowName());
+        body.put("status", document.getStatus());
+        body.put("domain", document.getDomain());
+        body.put("xmlContent", document.getXmlContent());
+        body.put("xmlSizeKb", document.getXmlSizeKb());
+
+        restClient.put()
+                .uri("/{indexName}/_doc/{id}", indexName, document.getId())
                 .body(body)
                 .retrieve()
                 .toBodilessEntity();
@@ -183,7 +211,17 @@ public class ElasticsearchService implements SearchEngineClient {
                 .toBodilessEntity();
     }
 
-    private Map<String, Object> createIndexMapping() {
+    /**
+     * Moda göre Elasticsearch mapping oluşturur.
+     *
+     * RAW_XML:
+     * - xmlContent indexlenir.
+     *
+     * EXTRACTED_DOCUMENT:
+     * - Parse edilmiş alanlar indexlenir.
+     * - xmlContent _source içinde saklanır ama search indexine dahil edilmez.
+     */
+    private Map<String, Object> createIndexMapping(SearchMode mode) {
         Map<String, Object> properties = new LinkedHashMap<>();
 
         properties.put("id", keywordField());
@@ -192,21 +230,22 @@ public class ElasticsearchService implements SearchEngineClient {
         properties.put("workflowName", textField());
         properties.put("status", keywordField());
         properties.put("domain", keywordField());
-        properties.put("screenTitles", textField());
-        properties.put("screenDescriptions", textField());
-        properties.put("actionTexts", textField());
-        properties.put("technicalTokens", keywordField());
-        properties.put("searchText", textField());
         properties.put("xmlSizeKb", integerField());
 
-        /*
-         * xmlContent _source içinde saklanacak ama search indexine dahil edilmeyecek.
-         * Böylece extracted searchText senaryosunda büyük XML indexi şişirmez.
-         */
-        Map<String, Object> xmlContentField = new LinkedHashMap<>();
-        xmlContentField.put("type", "text");
-        xmlContentField.put("index", false);
-        properties.put("xmlContent", xmlContentField);
+        if (mode == SearchMode.EXTRACTED_DOCUMENT) {
+            properties.put("screenTitles", textField());
+            properties.put("screenDescriptions", textField());
+            properties.put("actionTexts", textField());
+            properties.put("technicalTokens", keywordField());
+            properties.put("searchText", textField());
+
+            Map<String, Object> xmlContentField = new LinkedHashMap<>();
+            xmlContentField.put("type", "text");
+            xmlContentField.put("index", false);
+            properties.put("xmlContent", xmlContentField);
+        } else {
+            properties.put("xmlContent", textField());
+        }
 
         return Map.of(
                 "mappings", Map.of(
@@ -215,7 +254,10 @@ public class ElasticsearchService implements SearchEngineClient {
         );
     }
 
-    private Map<String, Object> createSearchRequest(String query, int limit) {
+    /**
+     * EXTRACTED_DOCUMENT arama isteği.
+     */
+    private Map<String, Object> createExtractedSearchRequest(String query, int limit) {
         return Map.of(
                 "size", limit,
                 "_source", List.of(
@@ -240,6 +282,42 @@ public class ElasticsearchService implements SearchEngineClient {
                                                                 "actionTexts",
                                                                 "searchText"
                                                         )
+                                                )
+                                        )
+                                ),
+                                "filter", List.of(
+                                        Map.of(
+                                                "term", Map.of(
+                                                        "status", "ACTIVE"
+                                                )
+                                        )
+                                )
+                        )
+                )
+        );
+    }
+
+    /**
+     * RAW_XML arama isteği.
+     */
+    private Map<String, Object> createRawXmlSearchRequest(String query, int limit) {
+        return Map.of(
+                "size", limit,
+                "_source", List.of(
+                        "id",
+                        "databaseId",
+                        "workflowCode",
+                        "workflowName",
+                        "status",
+                        "domain",
+                        "xmlSizeKb"
+                ),
+                "query", Map.of(
+                        "bool", Map.of(
+                                "must", List.of(
+                                        Map.of(
+                                                "match", Map.of(
+                                                        "xmlContent", query
                                                 )
                                         )
                                 ),
