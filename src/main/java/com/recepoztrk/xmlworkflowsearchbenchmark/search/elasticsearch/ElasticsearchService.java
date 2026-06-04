@@ -1,11 +1,13 @@
 package com.recepoztrk.xmlworkflowsearchbenchmark.search.elasticsearch;
 
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.IndexOperationResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchEngineResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchHitDto;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.entity.WorkflowDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.repository.WorkflowDocumentRepository;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.service.WorkflowXmlParser;
@@ -28,7 +30,7 @@ import java.util.*;
  * Bu aşama benchmark değildir. Bu aşama sadece Elasticsearch baseline'ın çalışır hale getirilmesidir.
  */
 @Service
-public class ElasticsearchService {
+public class ElasticsearchService implements SearchEngineClient {
 
     private static final String ENGINE_NAME = "elasticsearch";
 
@@ -52,6 +54,11 @@ public class ElasticsearchService {
                 .baseUrl(baseUrl)
                 .build();
         this.indexName = indexName;
+    }
+
+    @Override
+    public String engineName() {
+        return ENGINE_NAME;
     }
 
     /**

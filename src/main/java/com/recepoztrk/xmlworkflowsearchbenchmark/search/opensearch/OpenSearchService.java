@@ -4,6 +4,7 @@ import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.IndexOperationResu
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchEngineResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchHitDto;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.entity.WorkflowDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.repository.WorkflowDocumentRepository;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.service.WorkflowXmlParser;
@@ -24,7 +25,7 @@ import java.util.*;
  * aynı mapping mantığı ve aynı query yaklaşımıyla karşılaştırmak istiyoruz.
  */
 @Service
-public class OpenSearchService {
+public class OpenSearchService implements SearchEngineClient {
 
     private static final String ENGINE_NAME = "opensearch";
 
@@ -47,6 +48,11 @@ public class OpenSearchService {
                 .baseUrl(baseUrl)
                 .build();
         this.indexName = indexName;
+    }
+
+    @Override
+    public String engineName() {
+        return ENGINE_NAME;
     }
 
     public String health() {

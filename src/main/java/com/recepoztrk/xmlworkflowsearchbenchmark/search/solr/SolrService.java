@@ -4,6 +4,7 @@ import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.IndexOperationResu
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchEngineResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchHitDto;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.entity.WorkflowDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.repository.WorkflowDocumentRepository;
 import com.recepoztrk.xmlworkflowsearchbenchmark.workflow.service.WorkflowXmlParser;
@@ -11,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -29,7 +31,7 @@ import java.util.*;
  * 4. eDisMax query parser ile full-text search çalıştırır.
  */
 @Service
-public class SolrService {
+public class SolrService implements SearchEngineClient {
 
     private static final String ENGINE_NAME = "solr";
 
@@ -48,10 +50,21 @@ public class SolrService {
         this.workflowRepository = workflowRepository;
         this.xmlParser = xmlParser;
         this.jsonMapper = JsonMapper.builder().build();
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(10_000);
+        requestFactory.setReadTimeout(60_000);
+
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
+                .requestFactory(requestFactory)
                 .build();
+
         this.collectionName = collectionName;
+    }
+
+    @Override
+    public String engineName() {
+        return ENGINE_NAME;
     }
 
     /**
@@ -184,6 +197,42 @@ public class SolrService {
                 .toBodilessEntity();
     }
 
+    private String readStringField(JsonNode node, String fieldName) {
+        JsonNode fieldNode = node.path(fieldName);
+
+        if (fieldNode.isMissingNode() || fieldNode.isNull()) {
+            return "";
+        }
+
+        if (fieldNode.isArray()) {
+            if (fieldNode.size() == 0) {
+                return "";
+            }
+
+            return fieldNode.get(0).asText();
+        }
+
+        return fieldNode.asText();
+    }
+
+    private Integer readIntegerField(JsonNode node, String fieldName) {
+        JsonNode fieldNode = node.path(fieldName);
+
+        if (fieldNode.isMissingNode() || fieldNode.isNull()) {
+            return 0;
+        }
+
+        if (fieldNode.isArray()) {
+            if (fieldNode.size() == 0) {
+                return 0;
+            }
+
+            return fieldNode.get(0).asInt();
+        }
+
+        return fieldNode.asInt();
+    }
+
     private SearchEngineResult parseSearchResponse(String query, long tookMs, String responseBody) {
         try {
             JsonNode root = jsonMapper.readTree(responseBody);
@@ -195,13 +244,13 @@ public class SolrService {
 
             for (JsonNode docNode : responseNode.path("docs")) {
                 hits.add(new SearchHitDto(
-                        docNode.path("id").asText(),
+                        readStringField(docNode, "id"),
                         docNode.path("score").asDouble(),
-                        docNode.path("workflowCode_s").asText(),
-                        docNode.path("workflowName_txt").asText(),
-                        docNode.path("status_s").asText(),
-                        docNode.path("domain_s").asText(),
-                        docNode.path("xmlSizeKb_i").asInt()
+                        readStringField(docNode, "workflowCode_s"),
+                        readStringField(docNode, "workflowName_txt"),
+                        readStringField(docNode, "status_s"),
+                        readStringField(docNode, "domain_s"),
+                        readIntegerField(docNode, "xmlSizeKb_i")
                 ));
             }
 
