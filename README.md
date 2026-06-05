@@ -155,6 +155,31 @@ Bu mod mevcut sistemi birebir temsil etmez. Ek iyileştirme / teknik katkı sena
 
 ---
 
+## Benchmark Raporu ve Sonuç Özeti
+
+Ayrıntılı RAW_XML benchmark sonuçları test bazlı tablolar, ölçüm metrikleri ve teknik yorumlarla birlikte ayrı raporda tutulmaktadır:
+
+[`docs/raw_xml_benchmark_results.md`](docs/raw_xml_benchmark_results.md)
+
+README içinde yalnızca kısa özet verilmiştir. Detaylı deney sonuçları, test bazlı skorlar ve yorumlar için ilgili rapor dosyası incelenmelidir.
+
+Kısa teknik özet:
+
+- `RAW_XML` modu mevcut sisteme en yakın senaryo olarak değerlendirilmiştir.
+- XML boyutu `screenCount` parametresiyle kademeli olarak artırılmıştır.
+- Yaklaşık 2 MB XML dokümanı için `screenCount=1200` kullanılmıştır.
+- Testler lokal single-node Docker ortamında ve metadata-only response ile yapılmıştır.
+- Elasticsearch, büyük RAW_XML testlerinde kararlı baseline olarak çalışmıştır.
+- Apache Solr, RAW_XML metadata-only testlerinde düşük latency değerleriyle güçlü alternatif olarak öne çıkmıştır.
+- OpenSearch, küçük ve orta ölçekli testlerde çalışmasına rağmen 2 MB XML içeren 50 ve 100 dokümanlık RAW_XML testlerinde mevcut lokal kaynak koşullarında kararlı sonuç üretmemiştir.
+- 100/250/500 adet yaklaşık 2 MB XML dokümanı üzerinde yapılan Elasticsearch + Solr ölçek doğrulama testlerinde iki engine de hatasız çalışmıştır.
+- Solr sonuçlarında görülen çok düşük ve bazı durumlarda `0 ms` ölçümler, milisaniye çözünürlüğünün sınırı dikkate alınarak yorumlanmalıdır.
+- Son ölçek doğrulama testleri, aynı query’lerin tekrarlandığı warm-cache repeated-query benchmark olarak değerlendirilmelidir.
+
+Bu sonuçlar production kararı olarak değerlendirilmemelidir. Nihai karar için production-like cluster ortamı, gerçek query logları, daha geniş query seti, full XML response senaryosu ve relevance ölçümleri ayrıca gereklidir.
+
+--- 
+
 ## Mevcut Durum
 
 Tamamlananlar:
@@ -828,113 +853,6 @@ Benchmark çalıştırmadan önce aynı modda reindex yapılmalıdır:
 ```text
 RAW_XML benchmark              → önce RAW_XML reindex
 EXTRACTED_DOCUMENT benchmark   → önce EXTRACTED_DOCUMENT reindex
-```
-
----
-
-## İlk Benchmark Denemesi
-
-İlk benchmark denemesi lokal geliştirme ortamında yapılmıştır.
-
-### Test Parametreleri
-
-| Parametre | Değer |
-|---|---:|
-| Doküman sayısı | 10 |
-| Query sayısı | 3 |
-| Query’ler | `fatura itiraz`, `müşteri bilgileri`, `ödeme durumu` |
-| Limit | 5 |
-| Warm-up iteration | 5 |
-| Measurement iteration | 20 |
-| Response tipi | Metadata-only |
-| XML boyutu | Yaklaşık 34 KB / doküman |
-
-Bu sonuçlar production performans sonucu değildir. Ama benchmark altyapısının çalıştığını ve üç engine’in iki modda da hatasız ölçülebildiğini göstermektedir.
-
----
-
-### RAW_XML Sonuçları
-
-Bu mod mevcut sisteme en yakın senaryodur. XML parse edilmeden search engine’e aktarılmış ve arama ham XML içeriğinde yapılmıştır.
-
-| Engine | Query | Avg ms | Min ms | Max ms | P50 ms | P95 ms | P99 ms | Error |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | fatura itiraz | 6.35 | 3 | 23 | 5 | 13 | 23 | 0 |
-| Elasticsearch | müşteri bilgileri | 4.45 | 3 | 7 | 4 | 6 | 7 | 0 |
-| Elasticsearch | ödeme durumu | 3.65 | 3 | 5 | 4 | 4 | 5 | 0 |
-| OpenSearch | fatura itiraz | 6.40 | 4 | 12 | 5 | 11 | 12 | 0 |
-| OpenSearch | müşteri bilgileri | 9.35 | 3 | 97 | 4 | 9 | 97 | 0 |
-| OpenSearch | ödeme durumu | 3.30 | 3 | 5 | 3 | 4 | 5 | 0 |
-| Solr | fatura itiraz | 2.10 | 1 | 4 | 2 | 3 | 4 | 0 |
-| Solr | müşteri bilgileri | 1.15 | 1 | 3 | 1 | 2 | 3 | 0 |
-| Solr | ödeme durumu | 1.70 | 1 | 8 | 1 | 3 | 8 | 0 |
-
-Özet:
-
-| Engine | Ortalama Avg ms | Ortalama P50 ms | Ortalama P95 ms |
-|---|---:|---:|---:|
-| Elasticsearch | 4.82 | 4.33 | 7.67 |
-| OpenSearch | 6.35 | 4.00 | 8.00 |
-| Solr | 1.65 | 1.33 | 2.67 |
-
-RAW_XML modunda üç engine de başarılı çalışmıştır. Tüm testlerde `errorCount=0` dönmüştür.
-
-Dikkat: OpenSearch tarafında `müşteri bilgileri` sorgusunda `97 ms` değerinde bir outlier görülmüştür. Bu nedenle OpenSearch ortalaması yükselmiştir.
-
----
-
-### EXTRACTED_DOCUMENT Sonuçları
-
-Bu modda XML parse edilmiş, arama motorlarına daha düzenli bir `SearchDocument` modeli gönderilmiştir.
-
-| Engine | Query | Avg ms | Min ms | Max ms | P50 ms | P95 ms | P99 ms | Error |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | fatura itiraz | 4.50 | 3 | 6 | 4 | 5 | 6 | 0 |
-| Elasticsearch | müşteri bilgileri | 4.25 | 3 | 6 | 4 | 6 | 6 | 0 |
-| Elasticsearch | ödeme durumu | 4.55 | 3 | 7 | 4 | 7 | 7 | 0 |
-| OpenSearch | fatura itiraz | 5.65 | 5 | 8 | 5 | 7 | 8 | 0 |
-| OpenSearch | müşteri bilgileri | 5.60 | 4 | 23 | 4 | 8 | 23 | 0 |
-| OpenSearch | ödeme durumu | 4.90 | 4 | 7 | 5 | 7 | 7 | 0 |
-| Solr | fatura itiraz | 1.80 | 1 | 5 | 2 | 2 | 5 | 0 |
-| Solr | müşteri bilgileri | 1.65 | 1 | 4 | 2 | 2 | 4 | 0 |
-| Solr | ödeme durumu | 2.90 | 1 | 19 | 2 | 6 | 19 | 0 |
-
-Özet:
-
-| Engine | Ortalama Avg ms | Ortalama P50 ms | Ortalama P95 ms |
-|---|---:|---:|---:|
-| Elasticsearch | 4.43 | 4.00 | 6.00 |
-| OpenSearch | 5.38 | 4.67 | 7.33 |
-| Solr | 2.12 | 2.00 | 3.33 |
-
-EXTRACTED_DOCUMENT modunda da üç engine başarılı çalışmıştır. Tüm testlerde `errorCount=0` dönmüştür.
-
----
-
-## İlk Gözlemler
-
-İlk lokal benchmark denemesine göre:
-
-- Üç search engine de hem RAW_XML hem EXTRACTED_DOCUMENT modunda hatasız çalışmıştır.
-- Küçük veri setinde Solr en düşük latency değerlerini üretmiştir.
-- Elasticsearch ve OpenSearch birbirine yakın davranmıştır.
-- Elasticsearch, EXTRACTED_DOCUMENT modunda RAW_XML moduna göre daha stabil görünmektedir.
-- OpenSearch tarafında bazı outlier değerler görülmüştür.
-- Solr düşük latency değerleri üretmiştir; ancak bu sonuç küçük veri seti nedeniyle nihai karar için yeterli değildir.
-
-Bu aşamada şu sonuç çıkarılmamalıdır:
-
-```text
-Solr kesin olarak en iyi alternatiftir.
-```
-
-Doğru yorum:
-
-```text
-İlk lokal benchmark denemesinde üç servis de hatasız çalışmıştır.
-Küçük sentetik veri setinde Solr en düşük latency değerlerini üretmiştir.
-Elasticsearch ve OpenSearch birbirine yakın sonuçlar vermiştir.
-Nihai karar için daha büyük XML dokümanları, daha fazla kayıt, farklı query setleri ve full XML response senaryoları test edilmelidir.
 ```
 
 ---
