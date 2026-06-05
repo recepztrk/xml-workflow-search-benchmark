@@ -130,6 +130,7 @@ public class BenchmarkService {
         List<Long> samples = new ArrayList<>();
         int errorCount = 0;
         int lastHitCount = 0;
+        String lastErrorMessage = null;
 
         for (int i = 0; i < measurementIterations; i++) {
             try {
@@ -138,6 +139,7 @@ public class BenchmarkService {
                 lastHitCount = result.hitCount();
             } catch (Exception exception) {
                 errorCount++;
+                lastErrorMessage = extractErrorMessage(exception);
             }
         }
 
@@ -157,6 +159,7 @@ public class BenchmarkService {
                     0,
                     0,
                     0,
+                    lastErrorMessage,
                     List.of()
             );
         }
@@ -188,6 +191,7 @@ public class BenchmarkService {
                 percentile(sortedSamples, 50),
                 percentile(sortedSamples, 95),
                 percentile(sortedSamples, 99),
+                lastErrorMessage,
                 samples
         );
     }
@@ -281,6 +285,30 @@ public class BenchmarkService {
      * Örnek:
      * p95 için sorted listede ceil(0.95 * n) - 1 indexi alınır.
      */
+    private String extractErrorMessage(Exception exception) {
+        if (exception == null) {
+            return null;
+        }
+
+        String message = exception.getMessage();
+
+        if (message == null || message.isBlank()) {
+            message = exception.getClass().getSimpleName();
+        }
+
+        /*
+         * Search engine hataları bazen çok uzun JSON payload döndürebilir.
+         * Benchmark response'unun okunabilir kalması için mesajı kısaltıyoruz.
+         */
+        int maxLength = 1000;
+
+        if (message.length() > maxLength) {
+            return message.substring(0, maxLength) + "...";
+        }
+
+        return message;
+    }
+
     private double percentile(List<Long> sortedSamples, double percentile) {
         if (sortedSamples.isEmpty()) {
             return 0;

@@ -20,6 +20,7 @@ public record BenchmarkMeasurementResult(
         double p50Ms,
         double p95Ms,
         double p99Ms,
+        String lastErrorMessage,
         List<Long> samplesMs
 ) {
 }

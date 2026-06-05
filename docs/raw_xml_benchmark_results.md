@@ -394,7 +394,118 @@ Solr, aynı koşulda Elasticsearch’e göre daha düşük latency üretmiştir.
 
 ---
 
-## 12. Genel Değerlendirme
+---
+
+## 12. Temel Relevance Kontrolü
+
+RAW_XML benchmark sonuçlarında Solr’ın Elasticsearch’e göre belirgin biçimde daha düşük latency değerleri üretmesi nedeniyle, performans farkının arama sonucunun anlamlılığından kopuk olup olmadığını kontrol etmek için temel bir relevance sanity check yapılmıştır.
+
+Bu kontrol, production seviyesinde kapsamlı bir relevance değerlendirmesi değildir. Amaç, Elasticsearch ve Solr’ın aynı sorgular için benzer üst sonuçları döndürüp döndürmediğini görmektir.
+
+Test koşulu:
+
+```text
+Doküman sayısı: 100
+XML boyutu: 2068 KB / doküman
+Arama modu: RAW_XML
+Response tipi: Metadata-only
+Karşılaştırılan engine’ler: Elasticsearch, Solr
+Limit: 5
+```
+
+Test edilen sorgular:
+
+```text
+fatura itiraz
+müşteri bilgileri
+ödeme durumu
+```
+
+### 12.1. `fatura itiraz` Sorgusu
+
+| Sıra | Elasticsearch | Solr |
+|---:|---|---|
+| 1 | WF_BILLING_1 | WF_BILLING_1 |
+| 2 | WF_BILLING_6 | WF_BILLING_6 |
+| 3 | WF_BILLING_11 | WF_BILLING_11 |
+| 4 | WF_BILLING_16 | WF_BILLING_16 |
+| 5 | WF_BILLING_21 | WF_BILLING_21 |
+
+Gözlem:
+
+```text
+İki engine de aynı ilk 5 workflow sonucunu döndürmüştür.
+Sonuçların tamamı Billing domain’indedir.
+```
+
+### 12.2. `müşteri bilgileri` Sorgusu
+
+| Sıra | Elasticsearch | Solr |
+|---:|---|---|
+| 1 | WF_CUSTOMER_2 | WF_CUSTOMER_2 |
+| 2 | WF_CUSTOMER_7 | WF_CUSTOMER_7 |
+| 3 | WF_CUSTOMER_12 | WF_CUSTOMER_12 |
+| 4 | WF_CUSTOMER_17 | WF_CUSTOMER_17 |
+| 5 | WF_CUSTOMER_22 | WF_CUSTOMER_22 |
+
+Gözlem:
+
+```text
+İki engine de aynı ilk 5 workflow sonucunu döndürmüştür.
+Sonuçların tamamı Customer domain’indedir.
+```
+
+### 12.3. `ödeme durumu` Sorgusu
+
+| Sıra | Elasticsearch | Solr |
+|---:|---|---|
+| 1 | WF_PAYMENT_5 | WF_PAYMENT_5 |
+| 2 | WF_PAYMENT_10 | WF_PAYMENT_10 |
+| 3 | WF_PAYMENT_15 | WF_PAYMENT_15 |
+| 4 | WF_PAYMENT_20 | WF_PAYMENT_20 |
+| 5 | WF_PAYMENT_25 | WF_PAYMENT_25 |
+
+Gözlem:
+
+```text
+İki engine de aynı ilk 5 workflow sonucunu döndürmüştür.
+Sonuçların tamamı Payment domain’indedir.
+```
+
+### 12.4. Değerlendirme
+
+Temel relevance kontrolünde Elasticsearch ve Solr, üç sorgu için de aynı top-5 workflow listesini döndürmüştür.
+
+Bu sonuç, Solr’ın RAW_XML metadata-only benchmark testlerinde ürettiği düşük latency değerlerinin temel arama davranışından tamamen kopuk olmadığını göstermektedir.
+
+Ancak bu kontrol sınırlıdır. Çünkü:
+
+```text
+Sadece 3 sorgu kullanılmıştır.
+Sentetik veri seti kullanılmıştır.
+Gerçek kullanıcı query logları kullanılmamıştır.
+Hit@K, MRR, Precision@K gibi relevance metrikleri hesaplanmamıştır.
+Score değerleri engine’ler arasında doğrudan karşılaştırılmamıştır.
+```
+
+Bu nedenle bu bölüm yalnızca temel doğrulama olarak değerlendirilmelidir.
+
+Doğru yorum:
+
+```text
+Solr, bu RAW_XML metadata-only testlerinde yalnızca düşük latency üretmekle kalmamış, temel relevance kontrolünde de Elasticsearch ile uyumlu üst sonuçlar döndürmüştür.
+Buna rağmen nihai relevance değerlendirmesi için daha geniş query seti ve beklenen sonuç listesiyle sistematik ölçüm yapılmalıdır.
+```
+
+Not:
+
+```text
+Elasticsearch ve Solr score değerleri doğrudan karşılaştırılmamalıdır.
+Her search engine kendi scoring mekanizmasını ve ölçeğini kullanır.
+Bu nedenle bu kontrolde score değerleri değil, top-5 workflowCode uyumu dikkate alınmıştır.
+```
+
+## 13. Genel Değerlendirme
 
 RAW_XML benchmark testlerinden elde edilen temel sonuçlar aşağıdaki gibidir.
 
@@ -412,9 +523,10 @@ RAW_XML benchmark testlerinden elde edilen temel sonuçlar aşağıdaki gibidir.
 
 7. Local ortamda swap kullanımının yüksek olması nedeniyle heap değerleri 3 GB seviyesine çıkarılmamıştır. Daha yüksek heap ayarları, test ortamı kaynak baskısını artırarak benchmark sonuçlarını kirletebilir.
 
+8. Temel relevance kontrolünde Elasticsearch ve Solr, `fatura itiraz`, `müşteri bilgileri` ve `ödeme durumu` sorgularında aynı top-5 workflow listesini döndürmüştür. Bu sonuç, Solr’ın düşük latency değerlerinin temel sonuç kalitesinden kopuk olmadığını göstermektedir.
 ---
 
-## 13. İlk Teknik Sonuç
+## 14. İlk Teknik Sonuç
 
 Bu aşamadaki RAW_XML benchmark sonuçlarına göre:
 
@@ -446,7 +558,7 @@ Nihai karar için production-like ortam, daha gerçekçi query seti ve full XML 
 
 ---
 
-## 14. Sonraki Adımlar
+## 15. Sonraki Adımlar
 
 Bu rapordan sonra önerilen geliştirme adımları:
 
@@ -461,7 +573,7 @@ Bu rapordan sonra önerilen geliştirme adımları:
 
 ---
 
-## 15. Kısa Özet
+## 16. Kısa Özet
 
 Bu çalışma kapsamında RAW_XML modunda Elasticsearch, OpenSearch ve Solr üzerinde kademeli benchmark testleri yapılmıştır.
 
@@ -473,6 +585,7 @@ Elasticsearch ve Solr bu veri setinde RAW_XML search işlemini hatasız tamamlam
 OpenSearch, 2 GB heap ile 50 ve 100 dokümanlık 2 MB RAW_XML testlerinde kararlı sonuç üretmemiştir.
 Solr, metadata-only RAW_XML aramalarda en düşük latency değerlerini üretmiştir.
 Elasticsearch, baseline olarak kararlı ve kabul edilebilir latency değerleri göstermiştir.
+Temel relevance kontrolünde Elasticsearch ve Solr üç sorguda da aynı top-5 workflow sonuçlarını döndürmüştür.
 ```
 
 Bu aşamada proje, RAW_XML benchmark senaryosu için çalışan ve raporlanabilir bir PoC seviyesine ulaşmıştır.
