@@ -394,9 +394,121 @@ Solr, aynı koşulda Elasticsearch’e göre daha düşük latency üretmiştir.
 
 ---
 
+## 12. RAW_XML Benchmark Detaylı Sonuç Tablosu
+
+Aşağıdaki tablo, RAW_XML modunda yapılan tüm benchmark denemelerini tek tabloda özetler.
+
+Tabloda kullanılan kısaltmalar:
+
+| Alan | Açıklama |
+|---|---|
+| `Docs` | Testte kullanılan workflow dokümanı sayısı |
+| `XML KB` | Tekil XML doküman boyutu |
+| `Scope` | Test kapsamı |
+| `Avg` | Ortalama latency |
+| `Min` | En düşük latency |
+| `Max` | En yüksek latency |
+| `P50` | Median latency |
+| `P95` | 95. yüzdelik latency |
+| `P99` | 99. yüzdelik latency |
+| `Success` | Başarılı measurement sayısı |
+| `Error` | Hatalı measurement sayısı |
+| `Hit` | Son başarılı sorguda bulunan toplam eşleşme sayısı |
+
+> Not: `samplesMs` değerleri ham ölçüm listeleridir. Rapor okunabilirliğini korumak için bu tabloda ham `samplesMs` listeleri verilmemiştir. Bu listeler API response çıktılarında mevcuttur ve ileride CSV/JSON export ile saklanmalıdır.
+
+| Test | Scope | Docs | XML KB | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
+|---:|---|---:|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | All engines | 10 | 34 | Elasticsearch | fatura itiraz | 3.10 | 3 | 5 | 3 | 3 | 5 | 20 | 0 | 10 |
+| 1 | All engines | 10 | 34 | Elasticsearch | müşteri bilgileri | 3.05 | 3 | 4 | 3 | 3 | 4 | 20 | 0 | 10 |
+| 1 | All engines | 10 | 34 | Elasticsearch | ödeme durumu | 2.65 | 2 | 4 | 3 | 3 | 4 | 20 | 0 | 10 |
+| 1 | All engines | 10 | 34 | OpenSearch | fatura itiraz | 9.95 | 3 | 108 | 4 | 11 | 108 | 20 | 0 | 10 |
+| 1 | All engines | 10 | 34 | OpenSearch | müşteri bilgileri | 3.30 | 2 | 6 | 3 | 5 | 6 | 20 | 0 | 10 |
+| 1 | All engines | 10 | 34 | OpenSearch | ödeme durumu | 3.55 | 3 | 6 | 3 | 6 | 6 | 20 | 0 | 10 |
+| 1 | All engines | 10 | 34 | Solr | fatura itiraz | 1.25 | 1 | 2 | 1 | 2 | 2 | 20 | 0 | 10 |
+| 1 | All engines | 10 | 34 | Solr | müşteri bilgileri | 1.20 | 1 | 3 | 1 | 2 | 3 | 20 | 0 | 10 |
+| 1 | All engines | 10 | 34 | Solr | ödeme durumu | 1.50 | 1 | 11 | 1 | 1 | 11 | 20 | 0 | 10 |
+| 2 | All engines | 10 | 515 | Elasticsearch | fatura itiraz | 5.20 | 4 | 10 | 5 | 6 | 10 | 20 | 0 | 10 |
+| 2 | All engines | 10 | 515 | Elasticsearch | müşteri bilgileri | 5.20 | 4 | 7 | 5 | 7 | 7 | 20 | 0 | 10 |
+| 2 | All engines | 10 | 515 | Elasticsearch | ödeme durumu | 5.30 | 5 | 6 | 5 | 6 | 6 | 20 | 0 | 10 |
+| 2 | All engines | 10 | 515 | OpenSearch | fatura itiraz | 20.95 | 9 | 151 | 14 | 18 | 151 | 20 | 0 | 10 |
+| 2 | All engines | 10 | 515 | OpenSearch | müşteri bilgileri | 7.70 | 7 | 10 | 7 | 10 | 10 | 20 | 0 | 10 |
+| 2 | All engines | 10 | 515 | OpenSearch | ödeme durumu | 7.70 | 6 | 10 | 7 | 10 | 10 | 20 | 0 | 10 |
+| 2 | All engines | 10 | 515 | Solr | fatura itiraz | 1.00 | 1 | 1 | 1 | 1 | 1 | 20 | 0 | 10 |
+| 2 | All engines | 10 | 515 | Solr | müşteri bilgileri | 1.00 | 1 | 1 | 1 | 1 | 1 | 20 | 0 | 10 |
+| 2 | All engines | 10 | 515 | Solr | ödeme durumu | 0.95 | 0 | 1 | 1 | 1 | 1 | 20 | 0 | 10 |
+| 3 | All engines | 100 | 515 | Elasticsearch | fatura itiraz | 6.30 | 5 | 14 | 6 | 10 | 14 | 20 | 0 | 100 |
+| 3 | All engines | 100 | 515 | Elasticsearch | müşteri bilgileri | 8.60 | 5 | 41 | 6 | 11 | 41 | 20 | 0 | 100 |
+| 3 | All engines | 100 | 515 | Elasticsearch | ödeme durumu | 4.90 | 4 | 5 | 5 | 5 | 5 | 20 | 0 | 100 |
+| 3 | All engines | 100 | 515 | OpenSearch | fatura itiraz | 8.30 | 7 | 11 | 8 | 11 | 11 | 20 | 0 | 100 |
+| 3 | All engines | 100 | 515 | OpenSearch | müşteri bilgileri | 7.95 | 6 | 11 | 7 | 10 | 11 | 20 | 0 | 100 |
+| 3 | All engines | 100 | 515 | OpenSearch | ödeme durumu | 8.00 | 6 | 11 | 7 | 10 | 11 | 20 | 0 | 100 |
+| 3 | All engines | 100 | 515 | Solr | fatura itiraz | 0.95 | 0 | 2 | 1 | 1 | 2 | 20 | 0 | 100 |
+| 3 | All engines | 100 | 515 | Solr | müşteri bilgileri | 0.95 | 0 | 2 | 1 | 1 | 2 | 20 | 0 | 100 |
+| 3 | All engines | 100 | 515 | Solr | ödeme durumu | 0.40 | 0 | 1 | 0 | 1 | 1 | 20 | 0 | 100 |
+| 4 | All engines | 10 | 1032 | Elasticsearch | fatura itiraz | 8.80 | 7 | 14 | 8 | 13 | 14 | 20 | 0 | 10 |
+| 4 | All engines | 10 | 1032 | Elasticsearch | müşteri bilgileri | 12.20 | 8 | 53 | 9 | 20 | 53 | 20 | 0 | 10 |
+| 4 | All engines | 10 | 1032 | Elasticsearch | ödeme durumu | 8.95 | 7 | 16 | 8 | 14 | 16 | 20 | 0 | 10 |
+| 4 | All engines | 10 | 1032 | OpenSearch | fatura itiraz | 13.60 | 11 | 18 | 14 | 15 | 18 | 20 | 0 | 10 |
+| 4 | All engines | 10 | 1032 | OpenSearch | müşteri bilgileri | 14.10 | 11 | 26 | 14 | 15 | 26 | 20 | 0 | 10 |
+| 4 | All engines | 10 | 1032 | OpenSearch | ödeme durumu | 12.70 | 11 | 14 | 13 | 14 | 14 | 20 | 0 | 10 |
+| 4 | All engines | 10 | 1032 | Solr | fatura itiraz | 0.50 | 0 | 2 | 0 | 1 | 2 | 20 | 0 | 10 |
+| 4 | All engines | 10 | 1032 | Solr | müşteri bilgileri | 0.35 | 0 | 2 | 0 | 1 | 2 | 20 | 0 | 10 |
+| 4 | All engines | 10 | 1032 | Solr | ödeme durumu | 0.30 | 0 | 3 | 0 | 3 | 3 | 20 | 0 | 10 |
+| 5 | All engines | 10 | 2068 | Elasticsearch | fatura itiraz | 16.90 | 12 | 69 | 13 | 26 | 69 | 20 | 0 | 10 |
+| 5 | All engines | 10 | 2068 | Elasticsearch | müşteri bilgileri | 12.50 | 11 | 25 | 11 | 20 | 25 | 20 | 0 | 10 |
+| 5 | All engines | 10 | 2068 | Elasticsearch | ödeme durumu | 12.25 | 11 | 20 | 11 | 19 | 20 | 20 | 0 | 10 |
+| 5 | All engines | 10 | 2068 | OpenSearch | fatura itiraz | 24.45 | 24 | 30 | 24 | 25 | 30 | 20 | 0 | 10 |
+| 5 | All engines | 10 | 2068 | OpenSearch | müşteri bilgileri | 25.40 | 25 | 28 | 25 | 26 | 28 | 20 | 0 | 10 |
+| 5 | All engines | 10 | 2068 | OpenSearch | ödeme durumu | 25.25 | 24 | 26 | 25 | 26 | 26 | 20 | 0 | 10 |
+| 5 | All engines | 10 | 2068 | Solr | fatura itiraz | 1.05 | 1 | 2 | 1 | 1 | 2 | 20 | 0 | 10 |
+| 5 | All engines | 10 | 2068 | Solr | müşteri bilgileri | 1.20 | 1 | 3 | 1 | 2 | 3 | 20 | 0 | 10 |
+| 5 | All engines | 10 | 2068 | Solr | ödeme durumu | 0.05 | 0 | 1 | 0 | 0 | 1 | 20 | 0 | 10 |
+| 6 | All engines | 100 | 2068 | Elasticsearch | fatura itiraz | 19.15 | 17 | 22 | 19 | 21 | 22 | 20 | 0 | 100 |
+| 6 | All engines | 100 | 2068 | Elasticsearch | müşteri bilgileri | 13.45 | 13 | 15 | 13 | 15 | 15 | 20 | 0 | 100 |
+| 6 | All engines | 100 | 2068 | Elasticsearch | ödeme durumu | 14.05 | 12 | 36 | 13 | 15 | 36 | 20 | 0 | 100 |
+| 6 | All engines | 100 | 2068 | OpenSearch | fatura itiraz | 52.30 | 22 | 230 | 32 | 116 | 230 | 20 | 0 | 100 |
+| 6 | All engines | 100 | 2068 | OpenSearch | müşteri bilgileri | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 20 | 0 |
+| 6 | All engines | 100 | 2068 | OpenSearch | ödeme durumu | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 20 | 0 |
+| 6 | All engines | 100 | 2068 | Solr | fatura itiraz | 3.25 | 1 | 12 | 3 | 5 | 12 | 20 | 0 | 100 |
+| 6 | All engines | 100 | 2068 | Solr | müşteri bilgileri | 1.90 | 1 | 3 | 2 | 3 | 3 | 20 | 0 | 100 |
+| 6 | All engines | 100 | 2068 | Solr | ödeme durumu | 1.60 | 1 | 3 | 1 | 3 | 3 | 20 | 0 | 100 |
+| 7 | All engines | 50 | 2068 | Elasticsearch | fatura itiraz | 18.15 | 16 | 29 | 17 | 25 | 29 | 20 | 0 | 50 |
+| 7 | All engines | 50 | 2068 | Elasticsearch | müşteri bilgileri | 14.95 | 12 | 40 | 13 | 16 | 40 | 20 | 0 | 50 |
+| 7 | All engines | 50 | 2068 | Elasticsearch | ödeme durumu | 13.65 | 12 | 22 | 13 | 18 | 22 | 20 | 0 | 50 |
+| 7 | All engines | 50 | 2068 | OpenSearch | fatura itiraz | 49.53 | 21 | 169 | 48 | 169 | 169 | 19 | 1 | 50 |
+| 7 | All engines | 50 | 2068 | OpenSearch | müşteri bilgileri | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 20 | 0 |
+| 7 | All engines | 50 | 2068 | OpenSearch | ödeme durumu | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 20 | 0 |
+| 7 | All engines | 50 | 2068 | Solr | fatura itiraz | 15.20 | 1 | 81 | 5 | 64 | 81 | 20 | 0 | 50 |
+| 7 | All engines | 50 | 2068 | Solr | müşteri bilgileri | 2.00 | 1 | 5 | 2 | 4 | 5 | 20 | 0 | 50 |
+| 7 | All engines | 50 | 2068 | Solr | ödeme durumu | 1.85 | 1 | 5 | 2 | 3 | 5 | 20 | 0 | 50 |
+| 8 | ES + Solr isolation | 50 | 2068 | Elasticsearch | fatura itiraz | 19.80 | 15 | 75 | 17 | 20 | 75 | 20 | 0 | 50 |
+| 8 | ES + Solr isolation | 50 | 2068 | Elasticsearch | müşteri bilgileri | 14.10 | 12 | 27 | 13 | 16 | 27 | 20 | 0 | 50 |
+| 8 | ES + Solr isolation | 50 | 2068 | Elasticsearch | ödeme durumu | 12.75 | 11 | 20 | 12 | 17 | 20 | 20 | 0 | 50 |
+| 8 | ES + Solr isolation | 50 | 2068 | Solr | fatura itiraz | 3.65 | 1 | 11 | 3 | 11 | 11 | 20 | 0 | 50 |
+| 8 | ES + Solr isolation | 50 | 2068 | Solr | müşteri bilgileri | 3.40 | 1 | 15 | 2 | 10 | 15 | 20 | 0 | 50 |
+| 8 | ES + Solr isolation | 50 | 2068 | Solr | ödeme durumu | 2.20 | 1 | 3 | 2 | 3 | 3 | 20 | 0 | 50 |
+| 9 | ES + Solr isolation | 100 | 2068 | Elasticsearch | fatura itiraz | 19.15 | 14 | 78 | 16 | 21 | 78 | 20 | 0 | 100 |
+| 9 | ES + Solr isolation | 100 | 2068 | Elasticsearch | müşteri bilgileri | 13.45 | 11 | 35 | 12 | 14 | 35 | 20 | 0 | 100 |
+| 9 | ES + Solr isolation | 100 | 2068 | Elasticsearch | ödeme durumu | 14.55 | 11 | 40 | 12 | 23 | 40 | 20 | 0 | 100 |
+| 9 | ES + Solr isolation | 100 | 2068 | Solr | fatura itiraz | 2.25 | 1 | 8 | 1 | 6 | 8 | 20 | 0 | 100 |
+| 9 | ES + Solr isolation | 100 | 2068 | Solr | müşteri bilgileri | 2.90 | 1 | 16 | 2 | 5 | 16 | 20 | 0 | 100 |
+| 9 | ES + Solr isolation | 100 | 2068 | Solr | ödeme durumu | 1.45 | 1 | 4 | 1 | 3 | 4 | 20 | 0 | 100 |
+
+### Tablo Üzerinden Kısa Okuma
+
+Bu tabloya göre:
+
+1. Elasticsearch tüm RAW_XML testlerinde genel olarak kararlı çalışmıştır.
+2. Solr, başarılı tüm senaryolarda en düşük latency değerlerini üretmiştir.
+3. OpenSearch küçük ve orta ölçekli testlerde çalışsa da 2 MB XML dokümanlarıyla yapılan 50 ve 100 dokümanlık testlerde kararlı sonuç üretmemiştir.
+4. OpenSearch’ün hata verdiği testlerde `successCount=0`, `errorCount=20` değerleri görülmüştür.
+5. Elasticsearch + Solr izolasyon testlerinde iki engine de 100 adet 2 MB XML dokümanı üzerinde hatasız çalışmıştır.
+6. Solr’ın düşük latency değerleri temel relevance kontrolünde de Elasticsearch ile uyumlu top-5 sonuçlar üretmesiyle desteklenmiştir.
+
 ---
 
-## 12. Temel Relevance Kontrolü
+## 13. Temel Relevance Kontrolü
 
 RAW_XML benchmark sonuçlarında Solr’ın Elasticsearch’e göre belirgin biçimde daha düşük latency değerleri üretmesi nedeniyle, performans farkının arama sonucunun anlamlılığından kopuk olup olmadığını kontrol etmek için temel bir relevance sanity check yapılmıştır.
 
@@ -421,7 +533,7 @@ müşteri bilgileri
 ödeme durumu
 ```
 
-### 12.1. `fatura itiraz` Sorgusu
+### 13.1. `fatura itiraz` Sorgusu
 
 | Sıra | Elasticsearch | Solr |
 |---:|---|---|
@@ -438,7 +550,7 @@ Gözlem:
 Sonuçların tamamı Billing domain’indedir.
 ```
 
-### 12.2. `müşteri bilgileri` Sorgusu
+### 13.2. `müşteri bilgileri` Sorgusu
 
 | Sıra | Elasticsearch | Solr |
 |---:|---|---|
@@ -455,7 +567,7 @@ Gözlem:
 Sonuçların tamamı Customer domain’indedir.
 ```
 
-### 12.3. `ödeme durumu` Sorgusu
+### 13.3. `ödeme durumu` Sorgusu
 
 | Sıra | Elasticsearch | Solr |
 |---:|---|---|
@@ -472,7 +584,7 @@ Gözlem:
 Sonuçların tamamı Payment domain’indedir.
 ```
 
-### 12.4. Değerlendirme
+### 13.4. Değerlendirme
 
 Temel relevance kontrolünde Elasticsearch ve Solr, üç sorgu için de aynı top-5 workflow listesini döndürmüştür.
 
@@ -505,7 +617,7 @@ Her search engine kendi scoring mekanizmasını ve ölçeğini kullanır.
 Bu nedenle bu kontrolde score değerleri değil, top-5 workflowCode uyumu dikkate alınmıştır.
 ```
 
-## 13. Genel Değerlendirme
+## 14. Genel Değerlendirme
 
 RAW_XML benchmark testlerinden elde edilen temel sonuçlar aşağıdaki gibidir.
 
@@ -526,7 +638,7 @@ RAW_XML benchmark testlerinden elde edilen temel sonuçlar aşağıdaki gibidir.
 8. Temel relevance kontrolünde Elasticsearch ve Solr, `fatura itiraz`, `müşteri bilgileri` ve `ödeme durumu` sorgularında aynı top-5 workflow listesini döndürmüştür. Bu sonuç, Solr’ın düşük latency değerlerinin temel sonuç kalitesinden kopuk olmadığını göstermektedir.
 ---
 
-## 14. İlk Teknik Sonuç
+## 15. İlk Teknik Sonuç
 
 Bu aşamadaki RAW_XML benchmark sonuçlarına göre:
 
@@ -558,7 +670,7 @@ Nihai karar için production-like ortam, daha gerçekçi query seti ve full XML 
 
 ---
 
-## 15. Sonraki Adımlar
+## 16. Sonraki Adımlar
 
 Bu rapordan sonra önerilen geliştirme adımları:
 
@@ -573,7 +685,7 @@ Bu rapordan sonra önerilen geliştirme adımları:
 
 ---
 
-## 16. Kısa Özet
+## 17. Kısa Özet
 
 Bu çalışma kapsamında RAW_XML modunda Elasticsearch, OpenSearch ve Solr üzerinde kademeli benchmark testleri yapılmıştır.
 
