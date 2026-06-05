@@ -155,37 +155,6 @@ Bu mod mevcut sistemi birebir temsil etmez. Ek iyileştirme / teknik katkı sena
 
 ---
 
-## Benchmark Sonuç Özeti
-
-Ayrıntılı RAW_XML benchmark sonuçları ayrı raporda tutulmaktadır: [`docs/raw_xml_benchmark_results.md`](docs/raw_xml_benchmark_results.md)
-
-Kısa özet:
-
-- `RAW_XML` modu mevcut sisteme en yakın senaryo olarak test edilmiştir.
-- XML boyutu `screenCount` parametresiyle kademeli olarak artırılmıştır.
-- Yaklaşık 2 MB XML dokümanı için `screenCount=1200` kullanılmıştır.
-- Testler lokal single-node Docker ortamında ve metadata-only response ile yapılmıştır.
-- Elasticsearch, 100 adet yaklaşık 2 MB XML dokümanı üzerinde RAW_XML arama senaryosunu kararlı şekilde tamamlamıştır.
-- Solr, aynı senaryoda Elasticsearch’e göre daha düşük latency üretmiştir.
-- OpenSearch, küçük ve orta ölçekli testlerde çalışmasına rağmen 50 ve 100 adet 2 MB RAW_XML testlerinde 2 GB heap ile kararlı sonuç üretmemiştir.
-
-100 adet yaklaşık 2 MB XML dokümanı üzerinde Elasticsearch + Solr izolasyon testi:
-
-| Engine | Ortalama Avg ms | Ortalama P50 ms | Ortalama P95 ms | Başarı |
-|---|---:|---:|---:|---:|
-| Elasticsearch | 15.72 | 13.33 | 19.33 | 60/60 |
-| Apache Solr | 2.20 | 1.33 | 4.67 | 60/60 |
-
-OpenSearch için not:
-
-```text
-OpenSearch, 1 GB heap ile 100 adet yaklaşık 2 MB XML dokümanını RAW_XML modunda reindex ederken circuit_breaking_exception üretmiştir.
-Heap 2 GB seviyesine çıkarıldığında reindex başarılı olmuştur; ancak 50 ve 100 dokümanlık 2 MB RAW_XML search testlerinde kararlı sonuç üretmemiştir.
-```
-
-Bu sonuçlar production kararı olarak değerlendirilmemelidir. Testler lokal geliştirme ortamında yapılmıştır. Nihai karar için production-like cluster ortamı, gerçek query seti, full XML response senaryosu ve daha kapsamlı arama kalitesi ölçümleri ayrıca gereklidir.
-
-
 ## Mevcut Durum
 
 Tamamlananlar:
@@ -208,16 +177,18 @@ Tamamlananlar:
 - Warm-up iteration desteği eklendi.
 - Measurement iteration desteği eklendi.
 - `avg`, `min`, `max`, `p50`, `p95`, `p99` ölçümleri eklendi.
+- Benchmark response modeline `lastErrorMessage` alanı eklendi.
 - `RAW_XML` modu için 34 KB, 515 KB, 1 MB ve yaklaşık 2 MB XML dokümanlarıyla lokal benchmark testleri yapıldı.
 - 100 adet yaklaşık 2 MB XML dokümanı ile Elasticsearch + Solr izolasyon testi başarıyla tamamlandı.
+- 100/250/500 adet yaklaşık 2 MB XML dokümanı üzerinde 100 measurement iteration ile ölçek doğrulama testleri yapıldı.
 - OpenSearch tarafında büyük RAW_XML yükünde heap/circuit breaker davranışı gözlemlendi.
+- Temel relevance kontrolünde Elasticsearch ve Solr’ın üç ana sorguda aynı top-5 workflow sonuçlarını döndürdüğü doğrulandı.
 - Ayrıntılı RAW_XML benchmark raporu `docs/raw_xml_benchmark_results.md` dosyasına taşındı.
 
 Devam eden / yapılacak işler:
 
 - EXTRACTED_DOCUMENT modunu daha büyük veri setlerinde sınırlı şekilde test etmek
 - Search-only response vs full XML response benchmarkı eklemek
-- Benchmark response modeline hata mesajı alanı eklemek
 - CSV/JSON benchmark raporu üretimi
 - Bulk indexing optimizasyonu
 - Gerçek query loglarına yakın query seti
@@ -417,13 +388,6 @@ Volume’larla birlikte tamamen silmek için:
 docker compose down -v
 ```
 
-### JVM Heap Notu
-
-Büyük XML testlerinde search engine servisleri için JVM heap değeri önemlidir. 100 adet yaklaşık 2 MB XML dokümanı ile yapılan RAW_XML testlerinde 1 GB OpenSearch heap değeri yetersiz kalmış ve `circuit_breaking_exception` oluşmuştur.
-
-Lokal benchmarklarda Elasticsearch, OpenSearch ve Solr için 2 GB heap kullanılmıştır. Daha yüksek heap değerleri lokal makinede swap kullanımını artırabileceği için sonuçları kirletebilir.
-
-
 ---
 
 ## PostgreSQL Bilgileri
@@ -586,16 +550,7 @@ Parametreler:
 | `count` | Üretilecek workflow sayısı |
 | `screenCount` | Her workflow içinde üretilecek ekran sayısı |
 
-`screenCount` arttıkça XML boyutu büyür. Lokal testlerde gözlenen yaklaşık değerler:
-
-| screenCount | Yaklaşık XML Boyutu |
-|---:|---:|
-| 20 | 34 KB |
-| 300 | 515 KB |
-| 600 | 1032 KB |
-| 1200 | 2068 KB |
-
-Yaklaşık 2 MB XML dokümanı üretmek için `screenCount=1200` kullanılabilir.
+`screenCount` arttıkça XML boyutu büyür. Testlerde `screenCount=20` iken XML boyutu yaklaşık 34 KB oluşmuştur. Yaklaşık 2 MB XML simülasyonu için bu değer ileride artırılacaktır.
 
 ---
 
@@ -877,20 +832,133 @@ EXTRACTED_DOCUMENT benchmark   → önce EXTRACTED_DOCUMENT reindex
 
 ---
 
-## Benchmark Raporu
+## İlk Benchmark Denemesi
 
-İlk RAW_XML benchmark sonuçları README içinde uzun tablolar halinde tutulmak yerine ayrı bir raporda toplanmıştır: [`docs/raw_xml_benchmark_results.md`](docs/raw_xml_benchmark_results.md)
+İlk benchmark denemesi lokal geliştirme ortamında yapılmıştır.
 
-Bu raporda aşağıdaki başlıklar yer alır:
+### Test Parametreleri
 
-- kullanılan test ortamı,
-- XML boyutu ve doküman sayısı matrisi,
-- RAW_XML benchmark sonuçları,
-- OpenSearch circuit breaker / heap gözlemi,
-- Elasticsearch + Solr izolasyon testi,
-- ilk teknik değerlendirme ve sonraki adımlar.
+| Parametre | Değer |
+|---|---:|
+| Doküman sayısı | 10 |
+| Query sayısı | 3 |
+| Query’ler | `fatura itiraz`, `müşteri bilgileri`, `ödeme durumu` |
+| Limit | 5 |
+| Warm-up iteration | 5 |
+| Measurement iteration | 20 |
+| Response tipi | Metadata-only |
+| XML boyutu | Yaklaşık 34 KB / doküman |
 
-README içinde yalnızca kısa benchmark özeti verilmiştir. Ayrıntılı deney sonuçları için ilgili rapor dosyası incelenmelidir.
+Bu sonuçlar production performans sonucu değildir. Ama benchmark altyapısının çalıştığını ve üç engine’in iki modda da hatasız ölçülebildiğini göstermektedir.
+
+---
+
+### RAW_XML Sonuçları
+
+Bu mod mevcut sisteme en yakın senaryodur. XML parse edilmeden search engine’e aktarılmış ve arama ham XML içeriğinde yapılmıştır.
+
+| Engine | Query | Avg ms | Min ms | Max ms | P50 ms | P95 ms | P99 ms | Error |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Elasticsearch | fatura itiraz | 6.35 | 3 | 23 | 5 | 13 | 23 | 0 |
+| Elasticsearch | müşteri bilgileri | 4.45 | 3 | 7 | 4 | 6 | 7 | 0 |
+| Elasticsearch | ödeme durumu | 3.65 | 3 | 5 | 4 | 4 | 5 | 0 |
+| OpenSearch | fatura itiraz | 6.40 | 4 | 12 | 5 | 11 | 12 | 0 |
+| OpenSearch | müşteri bilgileri | 9.35 | 3 | 97 | 4 | 9 | 97 | 0 |
+| OpenSearch | ödeme durumu | 3.30 | 3 | 5 | 3 | 4 | 5 | 0 |
+| Solr | fatura itiraz | 2.10 | 1 | 4 | 2 | 3 | 4 | 0 |
+| Solr | müşteri bilgileri | 1.15 | 1 | 3 | 1 | 2 | 3 | 0 |
+| Solr | ödeme durumu | 1.70 | 1 | 8 | 1 | 3 | 8 | 0 |
+
+Özet:
+
+| Engine | Ortalama Avg ms | Ortalama P50 ms | Ortalama P95 ms |
+|---|---:|---:|---:|
+| Elasticsearch | 4.82 | 4.33 | 7.67 |
+| OpenSearch | 6.35 | 4.00 | 8.00 |
+| Solr | 1.65 | 1.33 | 2.67 |
+
+RAW_XML modunda üç engine de başarılı çalışmıştır. Tüm testlerde `errorCount=0` dönmüştür.
+
+Dikkat: OpenSearch tarafında `müşteri bilgileri` sorgusunda `97 ms` değerinde bir outlier görülmüştür. Bu nedenle OpenSearch ortalaması yükselmiştir.
+
+---
+
+### EXTRACTED_DOCUMENT Sonuçları
+
+Bu modda XML parse edilmiş, arama motorlarına daha düzenli bir `SearchDocument` modeli gönderilmiştir.
+
+| Engine | Query | Avg ms | Min ms | Max ms | P50 ms | P95 ms | P99 ms | Error |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Elasticsearch | fatura itiraz | 4.50 | 3 | 6 | 4 | 5 | 6 | 0 |
+| Elasticsearch | müşteri bilgileri | 4.25 | 3 | 6 | 4 | 6 | 6 | 0 |
+| Elasticsearch | ödeme durumu | 4.55 | 3 | 7 | 4 | 7 | 7 | 0 |
+| OpenSearch | fatura itiraz | 5.65 | 5 | 8 | 5 | 7 | 8 | 0 |
+| OpenSearch | müşteri bilgileri | 5.60 | 4 | 23 | 4 | 8 | 23 | 0 |
+| OpenSearch | ödeme durumu | 4.90 | 4 | 7 | 5 | 7 | 7 | 0 |
+| Solr | fatura itiraz | 1.80 | 1 | 5 | 2 | 2 | 5 | 0 |
+| Solr | müşteri bilgileri | 1.65 | 1 | 4 | 2 | 2 | 4 | 0 |
+| Solr | ödeme durumu | 2.90 | 1 | 19 | 2 | 6 | 19 | 0 |
+
+Özet:
+
+| Engine | Ortalama Avg ms | Ortalama P50 ms | Ortalama P95 ms |
+|---|---:|---:|---:|
+| Elasticsearch | 4.43 | 4.00 | 6.00 |
+| OpenSearch | 5.38 | 4.67 | 7.33 |
+| Solr | 2.12 | 2.00 | 3.33 |
+
+EXTRACTED_DOCUMENT modunda da üç engine başarılı çalışmıştır. Tüm testlerde `errorCount=0` dönmüştür.
+
+---
+
+## İlk Gözlemler
+
+İlk lokal benchmark denemesine göre:
+
+- Üç search engine de hem RAW_XML hem EXTRACTED_DOCUMENT modunda hatasız çalışmıştır.
+- Küçük veri setinde Solr en düşük latency değerlerini üretmiştir.
+- Elasticsearch ve OpenSearch birbirine yakın davranmıştır.
+- Elasticsearch, EXTRACTED_DOCUMENT modunda RAW_XML moduna göre daha stabil görünmektedir.
+- OpenSearch tarafında bazı outlier değerler görülmüştür.
+- Solr düşük latency değerleri üretmiştir; ancak bu sonuç küçük veri seti nedeniyle nihai karar için yeterli değildir.
+
+Bu aşamada şu sonuç çıkarılmamalıdır:
+
+```text
+Solr kesin olarak en iyi alternatiftir.
+```
+
+Doğru yorum:
+
+```text
+İlk lokal benchmark denemesinde üç servis de hatasız çalışmıştır.
+Küçük sentetik veri setinde Solr en düşük latency değerlerini üretmiştir.
+Elasticsearch ve OpenSearch birbirine yakın sonuçlar vermiştir.
+Nihai karar için daha büyük XML dokümanları, daha fazla kayıt, farklı query setleri ve full XML response senaryoları test edilmelidir.
+```
+
+---
+
+## Arama Kalitesi Açısından İlk Not
+
+RAW_XML modunda `fatura itiraz` sorgusunda üç servis de `WF_BILLING_1` ve `WF_BILLING_6` kayıtlarını üst sıralara getirmiştir. Bu beklenen davranıştır.
+
+Ancak RAW_XML modunda skor değerleri birbirine oldukça yakındır. Bunun nedeni ham XML içinde çok sayıda ortak kelime, teknik alan ve tekrar eden yapı bulunması olabilir.
+
+EXTRACTED_DOCUMENT modu bu noktada potansiyel olarak daha anlamlıdır. Çünkü arama yalnızca ham XML içinde değil, ayrıştırılmış ve daha anlamlı alanlarda yapılır:
+
+```text
+workflowName
+screenTitles
+screenDescriptions
+actionTexts
+technicalTokens
+searchText
+```
+
+Bu nedenle ileride yalnızca latency değil, relevance / arama kalitesi tarafı da ayrıca değerlendirilmelidir.
+
+---
 
 ## Hızlı Smoke Test
 
@@ -994,16 +1062,37 @@ technicalTokens_txt
 
 ---
 
+### 8. Solr sonuçları yorumlanırken ölçüm çözünürlüğü dikkate alınmalıdır
+
+Solr testlerinde özellikle 250 ve 500 adet yaklaşık 2 MB XML dokümanı üzerinde çok sayıda `0 ms` ölçüm görülmüştür. Bu değerler Solr’ın gerçekten sıfır sürede çalıştığı anlamına gelmez. Mevcut benchmark çıktısı milisaniye çözünürlüğündedir; 1 ms altındaki süreler `0 ms` olarak görünebilir.
+
+Bu nedenle Solr için doğru yorum şudur:
+
+```text
+Solr çok düşük latency üretmiştir; ancak bu ölçüm seviyesi Solr’ın gerçek alt-milisaniye dağılımını ayrıntılı göstermek için yeterli değildir.
+```
+
+### 9. Son ölçek testleri warm-cache repeated-query benchmark olarak değerlendirilmelidir
+
+100/250/500 dokümanlık son ölçek doğrulama testlerinde aynı üç query 100 kez tekrarlanmıştır. Bu durum JVM/JIT ısınması, OS filesystem cache, Lucene segmentlerinin bellekte sıcak hale gelmesi ve Solr query/result cache etkisi yaratabilir.
+
+Bu nedenle bu sonuçlar özellikle şu senaryoyu temsil eder:
+
+```text
+Lokal single-node ortamda, sıcak sistemde, tekrar eden query’lerle RAW_XML metadata-only arama latency’si.
+```
+
+Gerçek production trafiğini temsil etmek için daha çeşitli query seti, gerçek query logları ve production-like cluster ortamı ayrıca gereklidir.
+
 ## Planlanan Sonraki Adımlar
 
-1. EXTRACTED_DOCUMENT modunu daha büyük veri setlerinde sınırlı şekilde test etmek
+1. EXTRACTED_DOCUMENT modunu 100/250/500 dokümanlık seçili veri setlerinde test etmek
 2. Search-only response vs full XML response ayrımını eklemek
-3. Benchmark response modeline `lastErrorMessage` benzeri hata alanı eklemek
-4. CSV/JSON benchmark raporu üretmek
-5. Büyük veri setleri için Elasticsearch/OpenSearch `_bulk` ve Solr batch indexing optimizasyonunu değerlendirmek
-6. Daha gerçekçi query seti oluşturmak
-7. Relevance / arama kalitesi değerlendirmesi eklemek
-8. Production-like cluster ortamında test yapmak
+3. CSV/JSON benchmark raporu üretmek
+4. Büyük veri setleri için Elasticsearch/OpenSearch `_bulk` ve Solr batch indexing optimizasyonunu değerlendirmek
+5. Daha gerçekçi query seti oluşturmak
+6. Relevance / arama kalitesi değerlendirmesi eklemek
+7. Production-like cluster ortamında test yapmak
 
 ## Hedef
 

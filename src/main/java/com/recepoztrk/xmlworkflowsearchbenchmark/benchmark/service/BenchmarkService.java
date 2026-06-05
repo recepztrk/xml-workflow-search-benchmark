@@ -279,12 +279,6 @@ public class BenchmarkService {
                 : engineName.trim().toLowerCase(Locale.ROOT);
     }
 
-    /**
-     * Nearest-rank percentile hesabı.
-     *
-     * Örnek:
-     * p95 için sorted listede ceil(0.95 * n) - 1 indexi alınır.
-     */
     private String extractErrorMessage(Exception exception) {
         if (exception == null) {
             return null;
@@ -309,6 +303,12 @@ public class BenchmarkService {
         return message;
     }
 
+    /**
+     * Nearest-rank percentile hesabı.
+     *
+     * Örnek:
+     * p95 için sorted listede ceil(0.95 * n) - 1 indexi alınır.
+     */
     private double percentile(List<Long> sortedSamples, double percentile) {
         if (sortedSamples.isEmpty()) {
             return 0;
