@@ -1,0 +1,11 @@
+engine,query,searchMode,responseMode,limit,warmupIterations,measurementIterations,successCount,errorCount,lastHitCount,lastResponseSizeKb,avgMs,minMs,maxMs,p50Ms,p95Ms,p99Ms,lastErrorMessage
+elasticsearch,fatura itiraz,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,16.97,11.02,51.62,13.62,46.5,51.62,
+elasticsearch,müşteri bilgileri,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,12.85,10.78,39.95,12.03,15.85,39.95,
+elasticsearch,ödeme durumu,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,11.22,10.34,14.75,11.04,12.22,14.75,
+elasticsearch,abonelik iptal,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,11.08,10.37,14.83,10.85,12.1,14.83,
+elasticsearch,arıza kaydı,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,11.19,10.11,14.55,10.98,12.93,14.55,
+solr,fatura itiraz,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,1.4,0.87,3.34,1.24,2.87,3.34,
+solr,müşteri bilgileri,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,1.09,0.95,1.47,1.06,1.28,1.47,
+solr,ödeme durumu,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,1.01,0.8,1.77,0.96,1.45,1.77,
+solr,abonelik iptal,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,0.99,0.78,2.28,0.93,1.39,2.28,
+solr,arıza kaydı,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,1.11,0.82,2.36,1.02,1.95,2.36,

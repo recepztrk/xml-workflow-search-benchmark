@@ -1,7 +1,0 @@
-engine,query,searchMode,responseMode,limit,warmupIterations,measurementIterations,successCount,errorCount,lastHitCount,lastResponseSizeKb,avgMs,minMs,maxMs,p50Ms,p95Ms,p99Ms,lastErrorMessage
-elasticsearch,fatura itiraz,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,13.34,11,22,13.0,19.0,22.0,
-elasticsearch,müşteri bilgileri,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,63.9,11,516,55.0,134.0,516.0,
-elasticsearch,ödeme durumu,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,12.62,10,35,12.0,16.0,35.0,
-solr,fatura itiraz,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,0.36,0,2,0.0,1.0,2.0,
-solr,müşteri bilgileri,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,0.38,0,2,0.0,1.0,2.0,
-solr,ödeme durumu,RAW_XML,METADATA_ONLY,5,10,50,50,0,100,0,0.28,0,1,0.0,1.0,1.0,
