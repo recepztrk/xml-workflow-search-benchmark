@@ -1,0 +1,7 @@
+engine,query,searchMode,responseMode,limit,warmupIterations,measurementIterations,successCount,errorCount,lastHitCount,lastResponseSizeKb,avgMs,minMs,maxMs,p50Ms,p95Ms,p99Ms,lastErrorMessage
+elasticsearch,fatura itiraz,EXTRACTED_DOCUMENT,METADATA_ONLY,5,10,50,50,0,100,0,18.76,17,25,18.0,24.0,25.0,
+elasticsearch,müşteri bilgileri,EXTRACTED_DOCUMENT,METADATA_ONLY,5,10,50,50,0,100,0,19.14,16,53,17.0,29.0,53.0,
+elasticsearch,ödeme durumu,EXTRACTED_DOCUMENT,METADATA_ONLY,5,10,50,50,0,100,0,17.64,16,21,17.0,21.0,21.0,
+solr,fatura itiraz,EXTRACTED_DOCUMENT,METADATA_ONLY,5,10,50,50,0,100,0,0.04,0,1,0.0,0.0,1.0,
+solr,müşteri bilgileri,EXTRACTED_DOCUMENT,METADATA_ONLY,5,10,50,50,0,100,0,0.22,0,6,0.0,1.0,6.0,
+solr,ödeme durumu,EXTRACTED_DOCUMENT,METADATA_ONLY,5,10,50,50,0,100,0,0.02,0,1,0.0,0.0,1.0,

@@ -28,17 +28,17 @@ import java.util.Objects;
 
 /**
  * Apache Solr entegrasyon servisi.
- *
+ * <p>
  * RAW_XML:
  * - Mevcut sistem yaklaşımına yakındır.
  * - XML parse edilmeden xmlContent_txt alanına indexlenir.
  * - Arama doğrudan xmlContent_txt üzerinde yapılır.
- *
+ * <p>
  * EXTRACTED_DOCUMENT:
  * - XML parse edilir.
  * - SearchDocument alanları Solr'a aktarılır.
  * - Arama workflowName, screenTitles, descriptions, actions, searchText gibi alanlarda yapılır.
- *
+ * <p>
  * ResponseMode:
  * - METADATA_ONLY: Search sonucunda sadece metadata alanları döndürülür.
  * - FULL_XML_RESPONSE: Metadata alanlarına ek olarak xmlContent_txt de döndürülür.
@@ -163,14 +163,14 @@ public class SolrService implements SearchEngineClient {
                 .retrieve()
                 .body(String.class);
 
-        long tookMs = (System.nanoTime() - startNs) / 1_000_000;
+        double tookMs = (System.nanoTime() - startNs) / 1_000_000.0;
 
         return parseSearchResponse(query, tookMs, responseBody);
     }
 
     /**
      * Solr schema field'larını seçilen moda göre hazırlar.
-     *
+     * <p>
      * Solr'da Elasticsearch/OpenSearch mapping mantığı yerine schema field yaklaşımı vardır.
      * Bu yüzden field'ları açık şekilde tanımlıyoruz.
      */
@@ -387,7 +387,7 @@ public class SolrService implements SearchEngineClient {
         return value;
     }
 
-    private SearchEngineResult parseSearchResponse(String query, long tookMs, String responseBody) {
+    private SearchEngineResult parseSearchResponse(String query, double tookMs, String responseBody) {
         try {
             JsonNode root = jsonMapper.readTree(responseBody);
             JsonNode responseNode = root.path("response");

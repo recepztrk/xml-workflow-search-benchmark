@@ -12,14 +12,14 @@ public record BenchmarkMeasurementResult(
         String engine,
         String query,
 
-        /**
-         * Aramanın hangi doküman stratejisiyle yapıldığını gösterir.
-         * RAW_XML veya EXTRACTED_DOCUMENT.
+        /*
+          Aramanın hangi doküman stratejisiyle yapıldığını gösterir.
+          RAW_XML veya EXTRACTED_DOCUMENT.
          */
         SearchMode searchMode,
 
-        /**
-         * Search sonucunda sadece metadata mı yoksa full XML de mi döndürüldüğünü gösterir.
+        /*
+          Search sonucunda sadece metadata mı yoksa full XML de mi döndürüldüğünü gösterir.
          */
         ResponseMode responseMode,
 
@@ -30,19 +30,19 @@ public record BenchmarkMeasurementResult(
         int errorCount,
         int lastHitCount,
 
-        /**
-         * Son başarılı search response'unun yaklaşık toplam payload boyutu.
-         * METADATA_ONLY modunda düşük, FULL_XML_RESPONSE modunda XML boyutuna bağlı yüksek olur.
+        /*
+          Son başarılı search response'unun yaklaşık toplam payload boyutu.
+          METADATA_ONLY modunda düşük, FULL_XML_RESPONSE modunda XML boyutuna bağlı yüksek olur.
          */
         Integer lastResponseSizeKb,
 
         double avgMs,
-        long minMs,
-        long maxMs,
+        double minMs,
+        double maxMs,
         double p50Ms,
         double p95Ms,
         double p99Ms,
         String lastErrorMessage,
-        List<Long> samplesMs
+        List<Double> samplesMs
 ) {
 }

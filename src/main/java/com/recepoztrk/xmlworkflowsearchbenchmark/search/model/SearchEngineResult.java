@@ -8,12 +8,12 @@ import java.util.List;
 public record SearchEngineResult(
         String engine,
         String query,
-        long tookMs,
+        double tookMs,
         int hitCount,
 
-        /**
-         * Search response içinde dönen toplam yaklaşık payload boyutu.
-         * METADATA_ONLY modunda düşük, FULL_XML_RESPONSE modunda XML boyutuna bağlı yüksek olur.
+        /*
+          Search response içinde dönen toplam yaklaşık payload boyutu.
+          METADATA_ONLY modunda düşük, FULL_XML_RESPONSE modunda XML boyutuna bağlı yüksek olur.
          */
         Integer responseSizeKb,
         List<SearchHitDto> hits

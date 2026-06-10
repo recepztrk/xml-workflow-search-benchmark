@@ -25,7 +25,7 @@ public class BenchmarkController {
 
     /**
      * Sisteme kayıtlı search engine'leri listeler.
-     *
+     * <p>
      * GET /api/benchmark/engines
      */
     @GetMapping("/engines")
@@ -35,7 +35,7 @@ public class BenchmarkController {
 
     /**
      * Tüm search engine'lerde reindex işlemi çalıştırır.
-     *
+     * <p>
      * POST /api/benchmark/reindex-all
      */
     @PostMapping("/reindex-all")
@@ -47,7 +47,7 @@ public class BenchmarkController {
 
     /**
      * Seçilen engine'ler ve query seti için benchmark çalıştırır.
-     *
+     * <p>
      * POST /api/benchmark/run
      */
     @PostMapping("/run")
@@ -59,7 +59,7 @@ public class BenchmarkController {
 
     /**
      * Benchmark çalıştırır ve sonucu JSON + CSV olarak dışa aktarır.
-     *
+     * <p>
      * POST /api/benchmark/run-and-export
      */
     @PostMapping("/run-and-export")

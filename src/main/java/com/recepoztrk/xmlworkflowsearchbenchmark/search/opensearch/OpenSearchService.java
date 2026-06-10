@@ -26,17 +26,17 @@ import java.util.Objects;
 
 /**
  * OpenSearch alternatif arama motoru entegrasyon servisi.
- *
+ * <p>
  * RAW_XML:
  * - Mevcut sistem yaklaşımına yakındır.
  * - XML parse edilmeden xmlContent alanına indexlenir.
  * - Arama doğrudan xmlContent üzerinde yapılır.
- *
+ * <p>
  * EXTRACTED_DOCUMENT:
  * - XML parse edilir.
  * - SearchDocument alanları OpenSearch'e aktarılır.
  * - Arama workflowName, screenTitles, descriptions, actions ve searchText gibi alanlarda yapılır.
- *
+ * <p>
  * ResponseMode:
  * - METADATA_ONLY: Search sonucunda sadece metadata alanları döndürülür.
  * - FULL_XML_RESPONSE: Metadata alanlarına ek olarak xmlContent de döndürülür.
@@ -153,7 +153,7 @@ public class OpenSearchService implements SearchEngineClient {
                 .retrieve()
                 .body(String.class);
 
-        long tookMs = (System.nanoTime() - startNs) / 1_000_000;
+        double tookMs = (System.nanoTime() - startNs) / 1_000_000.0;
 
         return parseSearchResponse(query, tookMs, responseBody);
     }
@@ -225,10 +225,10 @@ public class OpenSearchService implements SearchEngineClient {
 
     /**
      * Moda göre OpenSearch mapping oluşturur.
-     *
+     * <p>
      * RAW_XML:
      * - xmlContent indexlenir.
-     *
+     * <p>
      * EXTRACTED_DOCUMENT:
      * - Parse edilmiş alanlar indexlenir.
      * - xmlContent _source içinde saklanır ama search indexine dahil edilmez.
@@ -358,7 +358,7 @@ public class OpenSearchService implements SearchEngineClient {
         return fields;
     }
 
-    private SearchEngineResult parseSearchResponse(String query, long tookMs, String responseBody) {
+    private SearchEngineResult parseSearchResponse(String query, double tookMs, String responseBody) {
         try {
             JsonNode root = jsonMapper.readTree(responseBody);
             JsonNode hitsNode = root.path("hits");
@@ -369,7 +369,7 @@ public class OpenSearchService implements SearchEngineClient {
             for (JsonNode hitNode : hitsNode.path("hits")) {
                 JsonNode source = hitNode.path("_source");
 
-                String xmlContent = readNullableText(source, "xmlContent");
+                String xmlContent = readNullableText(source);
 
                 Integer responseSizeKb = calculateHitResponseSizeKb(source, xmlContent);
 
@@ -405,8 +405,8 @@ public class OpenSearchService implements SearchEngineClient {
         }
     }
 
-    private String readNullableText(JsonNode source, String fieldName) {
-        JsonNode valueNode = source.path(fieldName);
+    private String readNullableText(JsonNode source) {
+        JsonNode valueNode = source.path("xmlContent");
 
         if (valueNode.isMissingNode() || valueNode.isNull()) {
             return null;

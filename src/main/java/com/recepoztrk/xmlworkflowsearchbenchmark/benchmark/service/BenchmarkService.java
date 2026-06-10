@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 
 /**
  * Elasticsearch, OpenSearch ve Solr için ortak benchmark runner.
- *
+ * <p>
  * Bu servis:
  * - Search engine client'larını ortak interface üzerinden yönetir.
  * - Aynı query setini seçilen engine'lere gönderir.
@@ -136,7 +136,7 @@ public class BenchmarkService {
             }
         }
 
-        List<Long> samples = new ArrayList<>();
+        List<Double> samples = new ArrayList<>();
         int errorCount = 0;
         int lastHitCount = 0;
         Integer lastResponseSizeKb = 0;
@@ -175,21 +175,25 @@ public class BenchmarkService {
                     0,
                     0,
                     lastErrorMessage,
-                    List.of()
+                    List.<Double>of()
             );
         }
 
-        List<Long> sortedSamples = samples.stream()
+        List<Double> sortedSamples = samples.stream()
                 .sorted()
                 .toList();
 
         double avg = samples.stream()
-                .mapToLong(Long::longValue)
+                .mapToDouble(Double::doubleValue)
                 .average()
                 .orElse(0);
 
-        long min = sortedSamples.getFirst();
-        long max = sortedSamples.getLast();
+        double min = sortedSamples.getFirst();
+        double max = sortedSamples.getLast();
+
+        List<Double> roundedSamples = samples.stream()
+                .map(this::round)
+                .toList();
 
         return new BenchmarkMeasurementResult(
                 client.engineName(),
@@ -204,13 +208,13 @@ public class BenchmarkService {
                 lastHitCount,
                 lastResponseSizeKb,
                 round(avg),
-                min,
-                max,
-                percentile(sortedSamples, 50),
-                percentile(sortedSamples, 95),
-                percentile(sortedSamples, 99),
+                round(min),
+                round(max),
+                round(percentile(sortedSamples, 50)),
+                round(percentile(sortedSamples, 95)),
+                round(percentile(sortedSamples, 99)),
                 lastErrorMessage,
-                samples
+                roundedSamples
         );
     }
 
@@ -329,11 +333,11 @@ public class BenchmarkService {
 
     /**
      * Nearest-rank percentile hesabı.
-     *
+     * <p>
      * Örnek:
      * p95 için sorted listede ceil(0.95 * n) - 1 indexi alınır.
      */
-    private double percentile(List<Long> sortedSamples, double percentile) {
+    private double percentile(List<Double> sortedSamples, double percentile) {
         if (sortedSamples.isEmpty()) {
             return 0;
         }

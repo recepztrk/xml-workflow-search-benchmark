@@ -7,11 +7,11 @@ import java.util.List;
 
 /**
  * Benchmark çalıştırma isteği.
- *
+ * <p>
  * mode:
  * - RAW_XML: Mevcut sistem yaklaşımı. XML parse edilmeden xmlContent üzerinde arama yapılır.
  * - EXTRACTED_DOCUMENT: XML parse edilerek oluşturulan SearchDocument alanlarında arama yapılır.
- *
+ * <p>
  * responseMode:
  * - METADATA_ONLY: Search sonucunda sadece metadata döner.
  * - FULL_XML_RESPONSE: Search sonucunda metadata + xmlContent döner.

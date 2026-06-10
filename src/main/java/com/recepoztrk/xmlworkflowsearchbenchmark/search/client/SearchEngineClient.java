@@ -43,7 +43,7 @@ public interface SearchEngineClient {
      * mode:
      * - RAW_XML
      * - EXTRACTED_DOCUMENT
-     *
+     * <p>
      * responseMode:
      * - METADATA_ONLY
      * - FULL_XML_RESPONSE

@@ -1,0 +1,31 @@
+{
+  "executedAt" : "2026-06-10T14:20:44.183608",
+  "engines" : [ "solr" ],
+  "queries" : [ "fatura itiraz" ],
+  "limit" : 5,
+  "warmupIterations" : 5,
+  "measurementIterations" : 20,
+  "mode" : "RAW_XML",
+  "responseMode" : "METADATA_ONLY",
+  "results" : [ {
+    "engine" : "solr",
+    "query" : "fatura itiraz",
+    "searchMode" : "RAW_XML",
+    "responseMode" : "METADATA_ONLY",
+    "limit" : 5,
+    "warmupIterations" : 5,
+    "measurementIterations" : 20,
+    "successCount" : 20,
+    "errorCount" : 0,
+    "lastHitCount" : 100,
+    "lastResponseSizeKb" : 0,
+    "avgMs" : 1.45,
+    "minMs" : 0.0,
+    "maxMs" : 3.0,
+    "p50Ms" : 1.0,
+    "p95Ms" : 3.0,
+    "p99Ms" : 3.0,
+    "lastErrorMessage" : null,
+    "samplesMs" : [ 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 2.0, 3.0, 3.0, 3.0, 2.0, 3.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0 ]
+  } ]
+}
