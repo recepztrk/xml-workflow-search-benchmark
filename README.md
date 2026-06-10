@@ -1,224 +1,87 @@
 # XML Workflow Search Benchmark
 
-Bu proje, PostgreSQL üzerinde tutulan XML tabanlı workflow dokümanları için arama motoru benchmark altyapısı oluşturmak amacıyla geliştirilmiş bir Spring Boot PoC projesidir.
+Bu proje, PostgreSQL üzerinde saklanan XML tabanlı workflow dokümanlarında full-text search performansını karşılaştırmak için geliştirilmiş bir Spring Boot PoC projesidir.
 
-Projenin temel amacı; müşteri temsilcisi platformlarında kullanılan XML workflow dokümanları üzerinde **Elasticsearch**, **OpenSearch** ve **Apache Solr** servislerinin free-text search performansını kontrollü ve tekrar edilebilir şekilde karşılaştırmaktır.
-
-Çalışma iki temel arama stratejisini destekler:
-
-1. **RAW_XML**  
-   Mevcut sisteme en yakın senaryodur. XML dokümanı parse edilmeden search engine’e aktarılır ve arama doğrudan ham XML içeriği üzerinde yapılır.
-
-2. **EXTRACTED_DOCUMENT**  
-   Alternatif/iyileştirme senaryosudur. XML parse edilir; `workflowName`, `screenTitles`, `screenDescriptions`, `actionTexts`, `technicalTokens` ve `searchText` gibi alanlar çıkarılır. Arama bu normalize edilmiş alanlar üzerinde yapılır.
-
----
+Amaç; müşteri temsilcisi platformlarında kullanılan büyük XML workflow dokümanları üzerinde **Elasticsearch**, **OpenSearch** ve **Apache Solr** servislerinin arama performansını kontrollü, tekrar edilebilir ve raporlanabilir şekilde ölçmektir.
 
 ## Problem Bağlamı
 
-İncelenen senaryoda bir **müşteri temsilcisi platformu** bulunmaktadır. Bu platformda müşteri temsilcisinin gördüğü ekranlar ve iş akışları XML dosyaları içinde tanımlanmaktadır.
+İncelenen sistemde müşteri temsilcisinin kullandığı ekranlar ve iş akışları XML dokümanları içinde tanımlanmaktadır. Bu XML dokümanları PostgreSQL üzerinde saklanmakta, free-text search işlemleri ise mevcut sistemde Elasticsearch üzerinden yapılmaktadır.
 
-Mevcut sistemde:
+Bu proje kapsamında aşağıdaki sorulara cevap aranmıştır:
 
-- XML veriler PostgreSQL üzerinde saklanmaktadır.
-- Aynı XML veriler Elasticsearch üzerinde de bulunmaktadır.
-- Free-text search işlemleri Elasticsearch üzerinden yapılmaktadır.
-- Mevcut sistemde XML dokümanları Elasticsearch’e uygulama tarafında parse edilmeden aktarılmaktadır.
-- Test kapsamında yaklaşık 2 MB boyutundaki XML dosyalarında arama performansının ölçülmesi hedeflenmektedir.
+- Büyük XML workflow dokümanlarında Elasticsearch baseline olarak nasıl davranır?
+- OpenSearch ve Apache Solr bu problem için teknik alternatif olabilir mi?
+- XML’i parse etmeden ham XML üzerinde arama yapmak yeterince kararlı mı?
+- XML parse edilerek oluşturulan normalize search document performans avantajı sağlar mı?
+- Search response içinde büyük XML içeriği döndürmek latency üzerinde ne kadar etkilidir?
 
-Bu proje, Elasticsearch’i mevcut sistem/baseline olarak alıp OpenSearch ve Apache Solr alternatiflerini teknik olarak karşılaştırmayı hedefler.
+## Kapsam
 
----
+Karşılaştırılan search engine’ler:
 
-## Benchmark Kapsamı
-
-| Servis | Rol |
+| Search Engine | Rol |
 |---|---|
 | Elasticsearch | Mevcut sistem / baseline |
-| OpenSearch | Elasticsearch’e en yakın alternatif |
-| Apache Solr | Lucene tabanlı olgun kurumsal alternatif |
+| OpenSearch | Elasticsearch’e yakın alternatif |
+| Apache Solr | Lucene tabanlı kurumsal alternatif |
 
-Bu problem özelinde Meilisearch ve PostgreSQL FTS ana benchmark kapsamına alınmamıştır. Çünkü mevcut sistem zaten Elasticsearch kullanmaktadır ve amaç Elasticsearch’e alternatif olabilecek kurumsal search engine’leri karşılaştırmaktır.
+Benchmark iki farklı indexleme stratejisini destekler:
 
----
+| Mod | Açıklama |
+|---|---|
+| `RAW_XML` | XML parse edilmeden `xmlContent` alanı search engine’e aktarılır. Mevcut sisteme en yakın senaryodur. |
+| `EXTRACTED_DOCUMENT` | XML parse edilir; `workflowName`, `screenTitles`, `screenDescriptions`, `actionTexts`, `technicalTokens`, `searchText` gibi alanlar çıkarılır ve arama bu alanlar üzerinden yapılır. |
 
-## Desteklenen Arama Modları
+Ayrıca iki farklı response modu desteklenir:
 
-### 1. RAW_XML
+| Response Mode | Açıklama |
+|---|---|
+| `METADATA_ONLY` | Search sonucunda yalnızca küçük metadata alanları döner. Search engine latency’sini ölçmek için kullanılır. |
+| `FULL_XML_RESPONSE` | Metadata alanlarına ek olarak XML içeriği de response’a dahil edilir. Büyük payload taşıma maliyetini ölçmek için kullanılır. |
 
-Bu mod mevcut sisteme en yakın yaklaşımı temsil eder.
+## Temel Sonuç
 
-Veri akışı:
+Final benchmark sonuçlarına göre:
 
-```text
-PostgreSQL
-    ↓
-WorkflowDocument
-    ↓
-xmlContent
-    ↓
-Elasticsearch / OpenSearch / Apache Solr
-    ↓
-xmlContent üzerinde search
-```
+- **Apache Solr**, metadata-only arama senaryolarında en düşük latency değerlerini üretmiştir.
+- **Elasticsearch**, Solr’a göre daha yüksek latency üretmiş ancak büyük testlerde kararlı baseline olarak çalışmıştır.
+- **OpenSearch**, küçük ve orta ölçekli testlerde çalışmış; ancak büyük XML yüklerinde lokal kaynak koşullarında ana final karşılaştırmaya dahil edilmemiştir.
+- **RAW_XML**, mevcut sistem yaklaşımına yakın, sade ve kararlı bir baseline olarak öne çıkmıştır.
+- **EXTRACTED_DOCUMENT**, mevcut parse yapısı ve query setiyle genel performans avantajı sağlamamıştır.
+- **FULL_XML_RESPONSE**, latency’yi ciddi şekilde artırmıştır. Bu nedenle search endpointinin metadata-only çalışması, XML detayının ayrı endpoint üzerinden alınması önerilir.
 
-Bu modda XML parse edilmez. Search engine’e gönderilen temel doküman yapısı şu şekildedir:
+## Final Büyük Test Özeti
 
-```json
-{
-   "id": "51",
-   "databaseId": 51,
-   "workflowCode": "WF_BILLING_1",
-   "workflowName": "Fatura İtiraz Süreci 1",
-   "status": "ACTIVE",
-   "domain": "Billing",
-   "xmlContent": "<workflow>...</workflow>",
-   "xmlSizeKb": 34
-}
-```
+Final büyük testler, 100 adet yaklaşık 2 MB XML workflow dokümanı üzerinde, Elasticsearch ve Solr ile çalıştırılmıştır.
 
-Arama yapılan ana alan:
-
-```text
-xmlContent
-```
-
-Solr tarafında karşılığı:
-
-```text
-xmlContent_txt
-```
-
----
-
-### 2. EXTRACTED_DOCUMENT
-
-Bu mod, XML’in parse edilip daha anlamlı bir search document haline getirildiği alternatif yaklaşımı temsil eder.
-
-Veri akışı:
-
-```text
-PostgreSQL
-    ↓
-WorkflowDocument
-    ↓
-xmlContent
-    ↓
-WorkflowXmlParser
-    ↓
-SearchDocument
-    ↓
-Elasticsearch / OpenSearch / Apache Solr
-    ↓
-Ayrıştırılmış alanlar üzerinde search
-```
-
-Bu modda search engine’e gönderilen normalize doküman şu alanları içerir:
-
-```text
-id
-databaseId
-workflowCode
-workflowName
-status
-domain
-screenTitles
-screenDescriptions
-actionTexts
-technicalTokens
-searchText
-xmlContent
-xmlSizeKb
-```
-
-Arama yapılan temel alanlar:
-
-```text
-workflowName
-screenTitles
-screenDescriptions
-actionTexts
-technicalTokens
-searchText
-```
-
-Bu mod mevcut sistemi birebir temsil etmez. Ek iyileştirme / teknik katkı senaryosu olarak değerlendirilmelidir.
-
----
-
-## Benchmark Matrisi
-
-| Senaryo | Elasticsearch | OpenSearch | Apache Solr | Açıklama |
+| Test | Engine | Ortalama Avg | Ortalama P95 | Açıklama |
 |---|---:|---:|---:|---|
-| RAW_XML | Var | Var | Var | Mevcut sisteme en yakın benchmark |
-| EXTRACTED_DOCUMENT | Var | Var | Var | XML parse edilirse performans/arama davranışı nasıl değişir? |
+| `RAW_XML + METADATA_ONLY` | Elasticsearch | 12.66 ms | 19.92 ms | Kararlı baseline |
+| `RAW_XML + METADATA_ONLY` | Solr | 1.12 ms | 1.79 ms | En düşük metadata-only latency |
+| `EXTRACTED_DOCUMENT + METADATA_ONLY` | Elasticsearch | 27.83 ms | 49.77 ms | RAW_XML’den belirgin yavaş |
+| `EXTRACTED_DOCUMENT + METADATA_ONLY` | Solr | 1.20 ms | 2.11 ms | RAW_XML’e yakın fakat daha iyi değil |
+| `RAW_XML + FULL_XML_RESPONSE` | Elasticsearch | 76.08 ms | 88.07 ms | Büyük response payload maliyeti belirgin |
+| `RAW_XML + FULL_XML_RESPONSE` | Solr | 66.32 ms | 75.97 ms | Arama değil payload taşıma baskın hale geliyor |
 
----
+Detaylı sonuç dosyaları `benchmark-results/` dizininde tutulmaktadır.
 
-## Benchmark Raporu ve Sonuç Özeti
+## Benchmark Artifact Dosyaları
 
-Ayrıntılı RAW_XML benchmark sonuçları test bazlı tablolar, ölçüm metrikleri ve teknik yorumlarla birlikte ayrı raporda tutulmaktadır:
+Final benchmark çıktıları JSON formatında saklanmıştır:
 
-[`docs/raw_xml_benchmark_results.md`](docs/raw_xml_benchmark_results.md)
+```text
+benchmark-results/
+├── small_raw_xml_metadata_only.json
+├── small_extracted_document_metadata_only.json
+├── medium_raw_xml_metadata_only.json
+├── medium_extracted_document_metadata_only.json
+├── large_raw_xml_metadata_only.json
+├── large_extracted_document_metadata_only.json
+└── large_raw_xml_full_xml_response.json
+```
 
-README içinde yalnızca kısa özet verilmiştir. Detaylı deney sonuçları, test bazlı skorlar ve yorumlar için ilgili rapor dosyası incelenmelidir.
-
-Kısa teknik özet:
-
-- `RAW_XML` modu mevcut sisteme en yakın senaryo olarak değerlendirilmiştir.
-- XML boyutu `screenCount` parametresiyle kademeli olarak artırılmıştır.
-- Yaklaşık 2 MB XML dokümanı için `screenCount=1200` kullanılmıştır.
-- Testler lokal single-node Docker ortamında ve metadata-only response ile yapılmıştır.
-- Elasticsearch, büyük RAW_XML testlerinde kararlı baseline olarak çalışmıştır.
-- Apache Solr, RAW_XML metadata-only testlerinde düşük latency değerleriyle güçlü alternatif olarak öne çıkmıştır.
-- OpenSearch, küçük ve orta ölçekli testlerde çalışmasına rağmen 2 MB XML içeren 50 ve 100 dokümanlık RAW_XML testlerinde mevcut lokal kaynak koşullarında kararlı sonuç üretmemiştir.
-- 100/250/500 adet yaklaşık 2 MB XML dokümanı üzerinde yapılan Elasticsearch + Solr ölçek doğrulama testlerinde iki engine de hatasız çalışmıştır.
-- Solr sonuçlarında görülen çok düşük ve bazı durumlarda `0 ms` ölçümler, milisaniye çözünürlüğünün sınırı dikkate alınarak yorumlanmalıdır.
-- Son ölçek doğrulama testleri, aynı query’lerin tekrarlandığı warm-cache repeated-query benchmark olarak değerlendirilmelidir.
-
-Bu sonuçlar production kararı olarak değerlendirilmemelidir. Nihai karar için production-like cluster ortamı, gerçek query logları, daha geniş query seti, full XML response senaryosu ve relevance ölçümleri ayrıca gereklidir.
-
---- 
-
-## Mevcut Durum
-
-Tamamlananlar:
-
-- Spring Boot projesi oluşturuldu.
-- PostgreSQL Docker Compose ile ayağa kaldırıldı.
-- `WorkflowDocument` entity modeli oluşturuldu.
-- PostgreSQL üzerinde XML workflow kaydı tutan yapı kuruldu.
-- Sentetik XML workflow üreten generator yazıldı.
-- XML içeriğini parse eden parser katmanı oluşturuldu.
-- Search engine’lere gönderilecek ortak `SearchDocument` modeli oluşturuldu.
-- Elasticsearch entegrasyonu tamamlandı.
-- OpenSearch entegrasyonu tamamlandı.
-- Apache Solr entegrasyonu tamamlandı.
-- Üç servis için health, reindex ve search endpointleri oluşturuldu.
-- Ortak `SearchEngineClient` interface’i oluşturuldu.
-- Ortak benchmark runner geliştirildi.
-- `RAW_XML` ve `EXTRACTED_DOCUMENT` modları eklendi.
-- Benchmark request/response modellerine `SearchMode` desteği eklendi.
-- Warm-up iteration desteği eklendi.
-- Measurement iteration desteği eklendi.
-- `avg`, `min`, `max`, `p50`, `p95`, `p99` ölçümleri eklendi.
-- Benchmark response modeline `lastErrorMessage` alanı eklendi.
-- `RAW_XML` modu için 34 KB, 515 KB, 1 MB ve yaklaşık 2 MB XML dokümanlarıyla lokal benchmark testleri yapıldı.
-- 100 adet yaklaşık 2 MB XML dokümanı ile Elasticsearch + Solr izolasyon testi başarıyla tamamlandı.
-- 100/250/500 adet yaklaşık 2 MB XML dokümanı üzerinde 100 measurement iteration ile ölçek doğrulama testleri yapıldı.
-- OpenSearch tarafında büyük RAW_XML yükünde heap/circuit breaker davranışı gözlemlendi.
-- Temel relevance kontrolünde Elasticsearch ve Solr’ın üç ana sorguda aynı top-5 workflow sonuçlarını döndürdüğü doğrulandı.
-- Ayrıntılı RAW_XML benchmark raporu `docs/raw_xml_benchmark_results.md` dosyasına taşındı.
-
-Devam eden / yapılacak işler:
-
-- EXTRACTED_DOCUMENT modunu daha büyük veri setlerinde sınırlı şekilde test etmek
-- Search-only response vs full XML response benchmarkı eklemek
-- CSV/JSON benchmark raporu üretimi
-- Bulk indexing optimizasyonu
-- Gerçek query loglarına yakın query seti
-- Relevance / arama kalitesi değerlendirmesi
-- Production-like cluster testi
+CSV çıktıları ara analiz için üretilebilmekle birlikte repoda temel sonuç dosyası olarak JSON çıktıları tutulmuştur.
 
 ## Kullanılan Teknolojiler
 
@@ -234,19 +97,15 @@ Devam eden / yapılacak işler:
 - Maven
 - Lombok
 
----
-
 ## Servis Portları
 
 | Servis | Port |
-|---|---|
+|---|---:|
 | Spring Boot API | `8080` |
 | PostgreSQL | `5434` |
 | OpenSearch | `9200` |
 | Elasticsearch | `9201` |
 | Apache Solr | `8983` |
-
----
 
 ## Proje Yapısı
 
@@ -256,31 +115,30 @@ src/main/java/com/recepoztrk/xmlworkflowsearchbenchmark
 │   ├── controller
 │   │   └── BenchmarkController.java
 │   ├── model
+│   │   ├── BenchmarkExportResponse.java
 │   │   ├── BenchmarkMeasurementResult.java
 │   │   ├── BenchmarkReindexResponse.java
 │   │   ├── BenchmarkRunRequest.java
 │   │   └── BenchmarkRunResponse.java
 │   └── service
+│       ├── BenchmarkExportService.java
 │       └── BenchmarkService.java
 │
 ├── search
 │   ├── client
 │   │   └── SearchEngineClient.java
-│   │
 │   ├── elasticsearch
 │   │   ├── ElasticsearchController.java
 │   │   └── ElasticsearchService.java
-│   │
 │   ├── opensearch
 │   │   ├── OpenSearchController.java
 │   │   └── OpenSearchService.java
-│   │
 │   ├── solr
 │   │   ├── SolrController.java
 │   │   └── SolrService.java
-│   │
 │   └── model
 │       ├── IndexOperationResult.java
+│       ├── ResponseMode.java
 │       ├── SearchDocument.java
 │       ├── SearchEngineResult.java
 │       ├── SearchHitDto.java
@@ -301,11 +159,9 @@ src/main/java/com/recepoztrk/xmlworkflowsearchbenchmark
 └── XmlWorkflowSearchBenchmarkApplication.java
 ```
 
----
-
 ## Genel Veri Akışı
 
-### RAW_XML Modu
+### RAW_XML
 
 ```text
 PostgreSQL
@@ -319,7 +175,7 @@ Elasticsearch / OpenSearch / Apache Solr
 SearchEngineResult
 ```
 
-### EXTRACTED_DOCUMENT Modu
+### EXTRACTED_DOCUMENT
 
 ```text
 PostgreSQL
@@ -337,13 +193,9 @@ Elasticsearch / OpenSearch / Apache Solr
 SearchEngineResult
 ```
 
----
-
 ## SearchDocument Modeli
 
-`SearchDocument`, XML parse edildikten sonra search engine’lere gönderilecek ortak normalize veri modelidir.
-
-Alanlar:
+`EXTRACTED_DOCUMENT` modunda ham XML parse edilerek aşağıdaki normalize alanlara ayrılır:
 
 ```text
 id
@@ -361,29 +213,9 @@ xmlContent
 xmlSizeKb
 ```
 
-Bu model sadece `EXTRACTED_DOCUMENT` modunda ana arama dokümanı olarak kullanılır.
-
----
-
-## XML Parser Mantığı
-
-`WorkflowXmlParser`, ham XML içeriğinden şu alanları çıkarır:
-
-| Alan | Açıklama |
-|---|---|
-| `screenTitles` | XML içindeki ekran başlıkları |
-| `screenDescriptions` | Açıklama ve isim metinleri |
-| `actionTexts` | Aksiyon/button metinleri |
-| `technicalTokens` | Workflow id, screen id, field name, action code gibi teknik tokenlar |
-| `searchText` | Arama için oluşturulan birleşik metin alanı |
-
-Bu yapı sayesinde ham XML’in tamamını aramak yerine daha temiz ve anlamlı bir search document üretilebilir.
-
----
+Bu modun amacı XML’i daha anlamlı alanlara ayırarak arama davranışını kontrol edilebilir hale getirmektir. Ancak mevcut testlerde bu yaklaşım genel performans avantajı üretmemiştir. Bunun temel nedeni, ayrıştırılmış alanların arama uzayını yeterince daraltmaması ve çok alanlı aramanın ek skor hesaplama maliyeti oluşturmasıdır.
 
 ## Docker Servislerini Çalıştırma
-
-Proje kök dizininde:
 
 ```bash
 docker compose up -d
@@ -395,25 +227,37 @@ Container durumunu görmek için:
 docker compose ps
 ```
 
-veya:
-
-```bash
-docker ps
-```
-
 Servisleri durdurmak için:
 
 ```bash
 docker compose down
 ```
 
-Volume’larla birlikte tamamen silmek için:
+Volume’larla birlikte temizlemek için:
 
 ```bash
 docker compose down -v
 ```
 
----
+## Uygulamayı Çalıştırma
+
+Docker servisleri çalıştıktan sonra:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Compile kontrolü:
+
+```bash
+./mvnw clean compile
+```
+
+Uygulama varsayılan olarak şu adreste çalışır:
+
+```text
+http://localhost:8080
+```
 
 ## PostgreSQL Bilgileri
 
@@ -425,147 +269,24 @@ Username: postgres
 Password: postgres
 ```
 
-PostgreSQL bağlantısını test etmek için:
+Bağlantı kontrolü:
 
 ```bash
 docker exec -it xml-benchmark-postgres psql -U postgres -d xml_benchmark -c "SELECT current_user, current_database();"
 ```
 
-Beklenen çıktı:
-
-```text
-current_user | current_database
--------------+-----------------
-postgres     | xml_benchmark
-```
-
----
-
-## Elasticsearch Bilgileri
-
-Elasticsearch host portu:
-
-```text
-http://localhost:9201
-```
-
-Doğrudan kontrol:
-
-```bash
-curl http://localhost:9201
-```
-
-Spring Boot üzerinden kontrol:
-
-```bash
-curl "http://localhost:8080/api/elasticsearch/health"
-```
-
----
-
-## OpenSearch Bilgileri
-
-OpenSearch host portu:
-
-```text
-http://localhost:9200
-```
-
-Doğrudan kontrol:
-
-```bash
-curl http://localhost:9200
-```
-
-Spring Boot üzerinden kontrol:
-
-```bash
-curl "http://localhost:8080/api/opensearch/health"
-```
-
----
-
-## Apache Solr Bilgileri
-
-Solr host portu:
-
-```text
-http://localhost:8983
-```
-
-Solr Admin UI:
-
-```text
-http://localhost:8983/solr
-```
-
-Solr core kontrolü:
-
-```bash
-curl "http://localhost:8983/solr/admin/cores?action=STATUS&wt=json"
-```
-
-Spring Boot üzerinden kontrol:
-
-```bash
-curl "http://localhost:8080/api/solr/health"
-```
-
----
-
-## Uygulamayı Çalıştırma
-
-Docker servisleri ayağa kalktıktan sonra:
-
-```bash
-./mvnw spring-boot:run
-```
-
-Uygulama varsayılan olarak şu adreste çalışır:
-
-```text
-http://localhost:8080
-```
-
-Compile kontrolü:
-
-```bash
-./mvnw clean compile
-```
-
----
-
 ## Workflow Endpointleri
 
-### Workflow Sayısını Görüntüleme
+### Workflow Sayısı
 
 ```bash
 curl "http://localhost:8080/api/workflows/count"
 ```
 
-Örnek cevap:
-
-```json
-{
-  "totalCount": 10
-}
-```
-
----
-
-### Sentetik XML Workflow Dataset Üretme
+### Sentetik Dataset Üretme
 
 ```bash
-curl -X POST "http://localhost:8080/api/workflows/generate?count=10&screenCount=20"
-```
-
-Örnek cevap:
-
-```json
-{
-  "message": "Workflow XML dataset generated successfully.",
-  "totalCount": 10
-}
+curl -X POST "http://localhost:8080/api/workflows/generate?count=100&screenCount=1200"
 ```
 
 Parametreler:
@@ -573,184 +294,70 @@ Parametreler:
 | Parametre | Açıklama |
 |---|---|
 | `count` | Üretilecek workflow sayısı |
-| `screenCount` | Her workflow içinde üretilecek ekran sayısı |
+| `screenCount` | Her workflow içindeki ekran sayısı |
 
-`screenCount` arttıkça XML boyutu büyür. Testlerde `screenCount=20` iken XML boyutu yaklaşık 34 KB oluşmuştur. Yaklaşık 2 MB XML simülasyonu için bu değer ileride artırılacaktır.
+Yaklaşık XML boyutları:
 
----
+| screenCount | Yaklaşık XML Boyutu |
+|---:|---:|
+| 20 | 34 KB |
+| 300 | 515 KB |
+| 600 | 1032 KB |
+| 1200 | 2068 KB |
 
-### Workflow Özetlerini Listeleme
+### Workflow Özetleri
 
 ```bash
 curl "http://localhost:8080/api/workflows"
 ```
 
-Örnek cevap:
+Bu endpoint XML içeriğini döndürmez. Büyük XML payload’larının response’u şişirmemesi için yalnızca özet metadata döner.
 
-```json
-[
-  {
-    "id": 51,
-    "workflowCode": "WF_BILLING_1",
-    "workflowName": "Fatura İtiraz Süreci 1",
-    "status": "ACTIVE",
-    "domain": "Billing",
-    "xmlSizeKb": 34
-  }
-]
-```
-
-Bu endpoint XML içeriğini döndürmez. Bunun nedeni büyük XML payload’larının response’u gereksiz şişirmesini önlemektir.
-
----
-
-### Tek Bir Workflow İçin SearchDocument Preview
+### SearchDocument Preview
 
 ```bash
-curl "http://localhost:8080/api/workflows/51/search-document"
+curl "http://localhost:8080/api/workflows/{id}/search-document"
 ```
 
-Örnek cevap:
-
-```json
-{
-  "id": "51",
-  "databaseId": 51,
-  "workflowCode": "WF_BILLING_1",
-  "workflowName": "Fatura İtiraz Süreci 1",
-  "status": "ACTIVE",
-  "domain": "Billing",
-  "screenTitleCount": 20,
-  "screenDescriptionCount": 62,
-  "actionTextCount": 60,
-  "technicalTokenCount": 273,
-  "searchTextLength": 8376,
-  "searchTextPreview": "WF_BILLING_1 Fatura İtiraz Süreci 1 ACTIVE Billing ...",
-  "xmlSizeKb": 34
-}
-```
-
-Not: `generate` endpointi her çalıştırıldığında eski kayıtları siler ve yeni kayıtlar oluşturur. PostgreSQL sequence sıfırlanmadığı için ID değeri sürekli artabilir. Bu yüzden sabit `21` veya `51` gibi ID’lere güvenmek yerine önce `/api/workflows` çıktısından güncel ID alınmalıdır.
-
----
-
-### İlk N Workflow İçin SearchDocument Preview
+İlk N kayıt için:
 
 ```bash
 curl "http://localhost:8080/api/workflows/search-documents?limit=3"
 ```
 
-Bu endpoint ilk N workflow kaydını parse ederek `SearchDocument` preview çıktısı döndürür.
-
----
-
 ## Tekil Search Engine Endpointleri
 
-Tekil engine endpointleri manuel test amacıyla kullanılabilir. Ortak benchmark için `/api/benchmark` endpointleri tercih edilmelidir.
+Tekil engine endpointleri manuel test içindir. Karşılaştırmalı benchmark için `/api/benchmark` endpointleri kullanılmalıdır.
 
 ### Elasticsearch
 
-Health:
-
 ```bash
 curl "http://localhost:8080/api/elasticsearch/health"
-```
 
-RAW_XML reindex:
-
-```bash
 curl -X POST "http://localhost:8080/api/elasticsearch/reindex?mode=RAW_XML"
-```
 
-RAW_XML search:
-
-```bash
 curl "http://localhost:8080/api/elasticsearch/search?q=fatura%20itiraz&limit=5&mode=RAW_XML"
 ```
 
-EXTRACTED_DOCUMENT reindex:
-
-```bash
-curl -X POST "http://localhost:8080/api/elasticsearch/reindex?mode=EXTRACTED_DOCUMENT"
-```
-
-EXTRACTED_DOCUMENT search:
-
-```bash
-curl "http://localhost:8080/api/elasticsearch/search?q=fatura%20itiraz&limit=5&mode=EXTRACTED_DOCUMENT"
-```
-
----
-
 ### OpenSearch
-
-Health:
 
 ```bash
 curl "http://localhost:8080/api/opensearch/health"
-```
 
-RAW_XML reindex:
-
-```bash
 curl -X POST "http://localhost:8080/api/opensearch/reindex?mode=RAW_XML"
-```
 
-RAW_XML search:
-
-```bash
 curl "http://localhost:8080/api/opensearch/search?q=fatura%20itiraz&limit=5&mode=RAW_XML"
 ```
 
-EXTRACTED_DOCUMENT reindex:
-
-```bash
-curl -X POST "http://localhost:8080/api/opensearch/reindex?mode=EXTRACTED_DOCUMENT"
-```
-
-EXTRACTED_DOCUMENT search:
-
-```bash
-curl "http://localhost:8080/api/opensearch/search?q=fatura%20itiraz&limit=5&mode=EXTRACTED_DOCUMENT"
-```
-
----
-
 ### Apache Solr
-
-Health:
 
 ```bash
 curl "http://localhost:8080/api/solr/health"
-```
 
-RAW_XML reindex:
-
-```bash
 curl -X POST "http://localhost:8080/api/solr/reindex?mode=RAW_XML"
-```
 
-RAW_XML search:
-
-```bash
 curl "http://localhost:8080/api/solr/search?q=fatura%20itiraz&limit=5&mode=RAW_XML"
 ```
-
-EXTRACTED_DOCUMENT reindex:
-
-```bash
-curl -X POST "http://localhost:8080/api/solr/reindex?mode=EXTRACTED_DOCUMENT"
-```
-
-EXTRACTED_DOCUMENT search:
-
-```bash
-curl "http://localhost:8080/api/solr/search?q=fatura%20itiraz&limit=5&mode=EXTRACTED_DOCUMENT"
-```
-
-Solr tarafında `EXTRACTED_DOCUMENT` modunda liste alanları (`screenTitles`, `screenDescriptions`, `actionTexts`, `technicalTokens`) tek text alanına dönüştürülerek indexlenmektedir. Bunun nedeni Solr dynamic field yapısında multi-valued alan davranışını PoC aşamasında sade ve stabil tutmaktır.
-
----
 
 ## Benchmark Endpointleri
 
@@ -760,7 +367,7 @@ Solr tarafında `EXTRACTED_DOCUMENT` modunda liste alanları (`screenTitles`, `s
 curl "http://localhost:8080/api/benchmark/engines"
 ```
 
-Örnek cevap:
+Beklenen çıktı:
 
 ```json
 [
@@ -770,9 +377,7 @@ curl "http://localhost:8080/api/benchmark/engines"
 ]
 ```
 
----
-
-### Tüm Engine’leri Seçilen Moda Göre Reindex Etme
+### Reindex
 
 RAW_XML:
 
@@ -786,68 +391,6 @@ EXTRACTED_DOCUMENT:
 curl -X POST "http://localhost:8080/api/benchmark/reindex-all?mode=EXTRACTED_DOCUMENT"
 ```
 
-Örnek cevap:
-
-```json
-{
-  "executedAt": "2026-06-04T14:25:52.195767",
-  "results": [
-    {
-      "engine": "elasticsearch",
-      "indexName": "workflow-documents",
-      "indexedDocumentCount": 10,
-      "message": "All workflow documents indexed into Elasticsearch successfully. mode=RAW_XML"
-    },
-    {
-      "engine": "opensearch",
-      "indexName": "workflow-documents",
-      "indexedDocumentCount": 10,
-      "message": "All workflow documents indexed into OpenSearch successfully. mode=RAW_XML"
-    },
-    {
-      "engine": "solr",
-      "indexName": "workflow-documents",
-      "indexedDocumentCount": 10,
-      "message": "All workflow documents indexed into Solr successfully. mode=RAW_XML"
-    }
-  ]
-}
-```
-
----
-
-### Benchmark Çalıştırma
-
-RAW_XML benchmark:
-
-```bash
-curl -X POST "http://localhost:8080/api/benchmark/run" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "mode": "RAW_XML",
-    "engines": ["elasticsearch", "opensearch", "solr"],
-    "queries": ["fatura itiraz", "müşteri bilgileri", "ödeme durumu"],
-    "limit": 5,
-    "warmupIterations": 5,
-    "measurementIterations": 20
-  }'
-```
-
-EXTRACTED_DOCUMENT benchmark:
-
-```bash
-curl -X POST "http://localhost:8080/api/benchmark/run" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "mode": "EXTRACTED_DOCUMENT",
-    "engines": ["elasticsearch", "opensearch", "solr"],
-    "queries": ["fatura itiraz", "müşteri bilgileri", "ödeme durumu"],
-    "limit": 5,
-    "warmupIterations": 5,
-    "measurementIterations": 20
-  }'
-```
-
 Benchmark çalıştırmadan önce aynı modda reindex yapılmalıdır:
 
 ```text
@@ -855,48 +398,14 @@ RAW_XML benchmark              → önce RAW_XML reindex
 EXTRACTED_DOCUMENT benchmark   → önce EXTRACTED_DOCUMENT reindex
 ```
 
----
-
-## Arama Kalitesi Açısından İlk Not
-
-RAW_XML modunda `fatura itiraz` sorgusunda üç servis de `WF_BILLING_1` ve `WF_BILLING_6` kayıtlarını üst sıralara getirmiştir. Bu beklenen davranıştır.
-
-Ancak RAW_XML modunda skor değerleri birbirine oldukça yakındır. Bunun nedeni ham XML içinde çok sayıda ortak kelime, teknik alan ve tekrar eden yapı bulunması olabilir.
-
-EXTRACTED_DOCUMENT modu bu noktada potansiyel olarak daha anlamlıdır. Çünkü arama yalnızca ham XML içinde değil, ayrıştırılmış ve daha anlamlı alanlarda yapılır:
-
-```text
-workflowName
-screenTitles
-screenDescriptions
-actionTexts
-technicalTokens
-searchText
-```
-
-Bu nedenle ileride yalnızca latency değil, relevance / arama kalitesi tarafı da ayrıca değerlendirilmelidir.
-
----
-
-## Hızlı Smoke Test
-
-Aşağıdaki komutlar mevcut yapının sağlıklı çalışıp çalışmadığını hızlıca kontrol etmek için kullanılabilir.
+### Benchmark Çalıştırma
 
 ```bash
-docker ps
-
-curl "http://localhost:8080/api/workflows/count"
-
-curl -X POST "http://localhost:8080/api/workflows/generate?count=10&screenCount=20"
-
-curl "http://localhost:8080/api/workflows/search-documents?limit=1"
-
-curl -X POST "http://localhost:8080/api/benchmark/reindex-all?mode=RAW_XML"
-
 curl -X POST "http://localhost:8080/api/benchmark/run" \
   -H "Content-Type: application/json" \
   -d '{
     "mode": "RAW_XML",
+    "responseMode": "METADATA_ONLY",
     "engines": ["elasticsearch", "opensearch", "solr"],
     "queries": ["fatura itiraz", "müşteri bilgileri", "ödeme durumu"],
     "limit": 5,
@@ -905,115 +414,92 @@ curl -X POST "http://localhost:8080/api/benchmark/run" \
   }'
 ```
 
-Beklenen durum:
+### Benchmark Çalıştırma ve JSON/CSV Export
 
-- Üç engine de reindex işlemini başarıyla tamamlamalıdır.
-- Benchmark response içinde `successCount` ölçüm sayısına eşit olmalıdır.
-- `errorCount` sıfır olmalıdır.
-- `hitCount` sıfır olmamalıdır.
+```bash
+curl -X POST "http://localhost:8080/api/benchmark/run-and-export" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "RAW_XML",
+    "responseMode": "METADATA_ONLY",
+    "engines": ["elasticsearch", "solr"],
+    "queries": ["fatura itiraz", "müşteri bilgileri", "ödeme durumu", "abonelik iptal", "arıza kaydı"],
+    "limit": 5,
+    "warmupIterations": 10,
+    "measurementIterations": 50
+  }'
+```
 
----
+Bu endpoint benchmark sonucunu `benchmark-results/` dizinine JSON ve CSV olarak yazar.
 
 ## Önemli Teknik Notlar
 
-### 1. Local test production benchmark değildir
+### Local test production benchmark değildir
 
-Local ortamda alınan `tookMs` değerleri production performansını doğrudan temsil etmez. Bu değerler sadece entegrasyon testi, metodoloji doğrulama ve kabaca davranış gözlemi için kullanılmalıdır.
+Tüm testler lokal single-node Docker ortamında yapılmıştır. Sonuçlar production performansını doğrudan temsil etmez; PoC seviyesinde davranış gözlemi ve yöntem karşılaştırması olarak değerlendirilmelidir.
 
-### 2. İlk sorgular yanıltıcı olabilir
+### Warm-up gereklidir
 
-İlk sorgularda JVM, cache ve engine internal warming etkileri nedeniyle süreler yüksek çıkabilir. Bu nedenle benchmark runner içinde warm-up iteration uygulanmaktadır.
+İlk sorgular JVM, JIT, cache ve search engine iç ısınma etkileri nedeniyle yanıltıcı olabilir. Bu nedenle benchmark runner warm-up iteration destekler.
 
-### 3. Metadata-only response bilinçli tercihtir
+### Metadata-only response bilinçli tercihtir
 
-Şu an search endpointleri full XML dönmemektedir. Sadece küçük metadata alanları döndürülmektedir. Bu bilinçli bir tercihtir. Çünkü 2 MB XML response’a eklenirse ölçülen süreye payload taşıma maliyeti karışır.
+Search latency ölçülürken XML içeriği response’a dahil edilmemelidir. Aksi halde search engine maliyeti ile büyük payload taşıma maliyeti karışır.
 
-### 4. Full XML response ayrı ölçülmelidir
+### Full XML response ayrı ölçülmelidir
 
-İleride full XML response senaryosu ayrıca test edilmelidir. Böylece search engine maliyeti ile payload taşıma maliyeti ayrıştırılabilir.
-
-### 5. Indexleme ve search modu aynı olmalıdır
-
-Benchmark yapmadan önce aynı modda reindex yapılmalıdır:
+`FULL_XML_RESPONSE` testleri, 5 adet yaklaşık 2 MB XML sonucunun response içinde taşınmasının latency’yi ciddi artırdığını göstermiştir. Bu nedenle önerilen mimari:
 
 ```text
-RAW_XML benchmark              → önce RAW_XML reindex
-EXTRACTED_DOCUMENT benchmark   → önce EXTRACTED_DOCUMENT reindex
+Search endpoint  → metadata-only sonuç döndürür
+Detail endpoint  → seçilen workflow için XML içeriğini ayrıca döndürür
 ```
 
-Aksi halde ölçüm teknik olarak yanlış olur.
+### RAW_XML beklenenden güçlü bir baseline’dır
 
-### 6. Elasticsearch ve OpenSearch query mantığı benzerdir
+RAW_XML, her sorguda XML string’i baştan sona lineer taramaz. Search engine indexleme sırasında XML içeriğini token’lara ayırır ve inverted index oluşturur. Bu nedenle tek büyük text field üzerinde arama yapmak, mevcut testlerde kararlı ve hızlı bir baseline üretmiştir.
 
-Elasticsearch ve OpenSearch tarafında:
+### EXTRACTED_DOCUMENT otomatik performans avantajı üretmez
 
-- RAW_XML modunda `xmlContent` üzerinde `match` query kullanılır.
-- EXTRACTED_DOCUMENT modunda `multi_match` query kullanılır.
+Parse edilmiş doküman yaklaşımı daha anlamlı alanlar sunsa da mevcut query setinde arama uzayını yeterince daraltmamıştır. Çok alanlı arama, field boost ve skor birleştirme maliyeti oluşturduğu için bazı testlerde RAW_XML’den daha yavaş çalışmıştır.
 
-EXTRACTED_DOCUMENT alan ağırlıkları:
+### OpenSearch büyük final testlerde dışarıda bırakılmıştır
 
-```text
-workflowName^3
-screenTitles^2
-screenDescriptions
-actionTexts
-searchText
+OpenSearch küçük ve orta testlerde değerlendirilmiştir. Ancak büyük XML yüklerinde lokal kaynak koşulları ve bellek baskısı nedeniyle final büyük karşılaştırma Elasticsearch + Solr üzerinden yapılmıştır.
+
+## Hızlı Smoke Test
+
+```bash
+docker compose up -d
+
+./mvnw clean compile
+
+./mvnw spring-boot:run
+
+curl -X POST "http://localhost:8080/api/workflows/generate?count=10&screenCount=20"
+
+curl -X POST "http://localhost:8080/api/benchmark/reindex-all?mode=RAW_XML"
+
+curl -X POST "http://localhost:8080/api/benchmark/run-and-export" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "RAW_XML",
+    "responseMode": "METADATA_ONLY",
+    "engines": ["elasticsearch", "opensearch", "solr"],
+    "queries": ["fatura itiraz", "müşteri bilgileri", "ödeme durumu"],
+    "limit": 5,
+    "warmupIterations": 3,
+    "measurementIterations": 10
+  }'
 ```
 
-### 7. Solr query mantığı farklıdır
+Beklenen durum:
 
-Solr tarafında:
-
-- RAW_XML modunda `qf=xmlContent_txt`
-- EXTRACTED_DOCUMENT modunda `edismax` query parser kullanılır.
-
-EXTRACTED_DOCUMENT alan ağırlıkları:
-
-```text
-workflowName_txt^3
-screenTitles_txt^2
-screenDescriptions_txt
-actionTexts_txt
-searchText_txt
-technicalTokens_txt
-```
-
----
-
-### 8. Solr sonuçları yorumlanırken ölçüm çözünürlüğü dikkate alınmalıdır
-
-Solr testlerinde özellikle 250 ve 500 adet yaklaşık 2 MB XML dokümanı üzerinde çok sayıda `0 ms` ölçüm görülmüştür. Bu değerler Solr’ın gerçekten sıfır sürede çalıştığı anlamına gelmez. Mevcut benchmark çıktısı milisaniye çözünürlüğündedir; 1 ms altındaki süreler `0 ms` olarak görünebilir.
-
-Bu nedenle Solr için doğru yorum şudur:
-
-```text
-Solr çok düşük latency üretmiştir; ancak bu ölçüm seviyesi Solr’ın gerçek alt-milisaniye dağılımını ayrıntılı göstermek için yeterli değildir.
-```
-
-### 9. Son ölçek testleri warm-cache repeated-query benchmark olarak değerlendirilmelidir
-
-100/250/500 dokümanlık son ölçek doğrulama testlerinde aynı üç query 100 kez tekrarlanmıştır. Bu durum JVM/JIT ısınması, OS filesystem cache, Lucene segmentlerinin bellekte sıcak hale gelmesi ve Solr query/result cache etkisi yaratabilir.
-
-Bu nedenle bu sonuçlar özellikle şu senaryoyu temsil eder:
-
-```text
-Lokal single-node ortamda, sıcak sistemde, tekrar eden query’lerle RAW_XML metadata-only arama latency’si.
-```
-
-Gerçek production trafiğini temsil etmek için daha çeşitli query seti, gerçek query logları ve production-like cluster ortamı ayrıca gereklidir.
-
-## Planlanan Sonraki Adımlar
-
-1. EXTRACTED_DOCUMENT modunu 100/250/500 dokümanlık seçili veri setlerinde test etmek
-2. Search-only response vs full XML response ayrımını eklemek
-3. CSV/JSON benchmark raporu üretmek
-4. Büyük veri setleri için Elasticsearch/OpenSearch `_bulk` ve Solr batch indexing optimizasyonunu değerlendirmek
-5. Daha gerçekçi query seti oluşturmak
-6. Relevance / arama kalitesi değerlendirmesi eklemek
-7. Production-like cluster ortamında test yapmak
+- Reindex işlemi başarılı tamamlanmalıdır.
+- `successCount`, measurement sayısına eşit olmalıdır.
+- `errorCount` sıfır olmalıdır.
+- `lastHitCount` sıfırdan büyük olmalıdır.
 
 ## Hedef
 
-Bu projenin nihai hedefi, XML tabanlı büyük workflow dokümanları için Elasticsearch, OpenSearch ve Apache Solr servislerini kontrollü ve tekrar edilebilir şekilde benchmark edebilecek bir altyapı oluşturmaktır.
-
-Bu sayede mevcut Elasticsearch kullanımının performansı ölçülebilecek, OpenSearch ve Apache Solr alternatiflerinin teknik uygunluğu değerlendirilebilecek ve XML’i parse edip normalize search document üretmenin etkisi ayrıca analiz edilebilecektir.
+Bu projenin hedefi, XML tabanlı büyük workflow dokümanları için search engine karşılaştırması yapılabilecek tekrar edilebilir bir benchmark altyapısı oluşturmaktır. Elde edilen sonuçlar, mevcut Elasticsearch yaklaşımının davranışını ölçmüş; Apache Solr’ın metadata-only arama senaryosunda güçlü bir alternatif olduğunu göstermiş; XML payload taşıma ve parse edilmiş doküman yaklaşımı için ek teknik değerlendirme sağlamıştır.

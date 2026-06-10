@@ -1,379 +1,326 @@
-# RAW_XML Benchmark Sonuçları
-Bu doküman, XML Workflow Search Benchmark projesinde yapılan RAW_XML benchmark denemelerini test bazlı olarak özetler. Amaç; PostgreSQL üzerinde tutulan büyük XML workflow dokümanlarında Elasticsearch, OpenSearch ve Apache Solr servislerinin arama davranışını kontrollü biçimde karşılaştırmaktır.
-RAW_XML modu, mevcut sisteme en yakın senaryodur. XML parse edilmeden search engine’e aktarılır ve arama ham XML içeriği üzerinde yapılır.
-> Bu sonuçlar production kararı değildir. Testler lokal single-node Docker ortamında, sentetik XML verisiyle ve metadata-only response ile yapılmıştır.
-## 1. Test Ortamı ve Kapsam
+# XML Workflow Search Benchmark — Final Benchmark Raporu
+
+## 1. Amaç
+
+Bu rapor, XML Workflow Search Benchmark projesi kapsamında yapılan benchmark testlerini ve teknik değerlendirmeleri özetler.
+
+Projenin amacı, PostgreSQL üzerinde tutulan büyük XML workflow dokümanlarında Elasticsearch, OpenSearch ve Apache Solr servislerinin full-text search performansını karşılaştırmaktır.
+
+Çalışmada üç temel konu incelenmiştir:
+
+1. Büyük XML dokümanlarında search engine performansı
+2. `RAW_XML` ve `EXTRACTED_DOCUMENT` indexleme stratejilerinin etkisi
+3. `METADATA_ONLY` ve `FULL_XML_RESPONSE` response modlarının latency üzerindeki etkisi
+
+## 2. Test Ortamı
+
 | Bileşen | Değer |
 |---|---|
 | Uygulama | Spring Boot API |
 | Veri deposu | PostgreSQL |
 | Search engine’ler | Elasticsearch, OpenSearch, Apache Solr |
-| Test modu | RAW_XML |
-| Response tipi | Metadata-only |
-| Küçük testler | 5 warm-up, 20 measurement |
-| Ölçek doğrulama testleri | 10 warm-up, 100 measurement |
-| Büyük XML boyutu | screenCount=1200, yaklaşık 2068 KB |
-## 2. Veri Boyutu Üretimi
-XML boyutu, sentetik workflow generator içindeki `screenCount` parametresi artırılarak büyütülmüştür. Bu işlem yalnızca metadata değerini değiştirmez; XML içine daha fazla screen, field, action, validation ve transition bloğu yazıldığı için `xmlContent` gerçek anlamda büyür.
+| Çalışma ortamı | Lokal single-node Docker Compose |
+| Veri tipi | Sentetik XML workflow dokümanları |
+| Ana büyük XML boyutu | Yaklaşık 2068 KB |
+| Büyük test doküman sayısı | 100 |
+| Büyük test warm-up | 10 |
+| Büyük test measurement | 50 |
+| Ana query seti | 5 sorgu |
+| Ana response tipi | Metadata-only |
+
+Bu sonuçlar production kararı olarak değerlendirilmemelidir. Testler lokal single-node Docker ortamında, sentetik veriyle ve sınırlı query setiyle yapılmıştır.
+
+## 3. Veri Seti
+
+XML boyutu `screenCount` parametresiyle büyütülmüştür. `screenCount` arttıkça XML içindeki screen, field, action, validation ve transition blokları artar.
+
 | screenCount | Yaklaşık XML Boyutu |
 |---:|---:|
 | 20 | 34 KB |
 | 300 | 515 KB |
 | 600 | 1032 KB |
 | 1200 | 2068 KB |
-## 3. Metrikler
+
+Final büyük testler için kullanılan ana veri seti:
+
+| Parametre | Değer |
+|---|---:|
+| Workflow sayısı | 100 |
+| Tekil XML boyutu | Yaklaşık 2068 KB |
+| Toplam ham XML hacmi | Yaklaşık 200 MB |
+| Query sayısı | 5 |
+| Limit | 5 |
+| Warm-up iteration | 10 |
+| Measurement iteration | 50 |
+
+## 4. Arama Modları
+
+### 4.1 RAW_XML
+
+`RAW_XML`, mevcut sisteme en yakın senaryodur. XML dokümanı parse edilmeden search engine’e aktarılır. Arama doğrudan ham XML içeriğinin indexlenmiş hali üzerinde yapılır.
+
+Arama alanları:
+
+| Engine | Arama Alanı |
+|---|---|
+| Elasticsearch | `xmlContent` |
+| OpenSearch | `xmlContent` |
+| Solr | `xmlContent_txt` |
+
+Bu yaklaşımda XML her sorguda baştan sona lineer taranmaz. Search engine indexleme sırasında XML içeriğini tokenize eder ve inverted index oluşturur.
+
+### 4.2 EXTRACTED_DOCUMENT
+
+`EXTRACTED_DOCUMENT`, XML’in parse edilerek normalize bir search document haline getirildiği alternatif yaklaşımdır.
+
+Çıkarılan temel alanlar:
+
+```text
+workflowName
+screenTitles
+screenDescriptions
+actionTexts
+technicalTokens
+searchText
+```
+
+Bu yaklaşımın amacı, ham XML içeriği yerine daha anlamlı alanlar üzerinde arama yapmaktır. Ancak mevcut testlerde bu yaklaşım genel performans avantajı sağlamamıştır.
+
+## 5. Response Modları
+
+### 5.1 METADATA_ONLY
+
+Search sonucunda yalnızca küçük metadata alanları döndürülür:
+
+```text
+id
+workflowCode
+workflowName
+status
+domain
+xmlSizeKb
+score
+```
+
+Bu mod search engine latency’sini ölçmek için kullanılmıştır.
+
+### 5.2 FULL_XML_RESPONSE
+
+Search sonucunda metadata alanlarına ek olarak XML içeriği de response’a dahil edilir. Bu mod, büyük payload taşıma maliyetini ölçmek için kullanılmıştır.
+
+Final testlerde `limit=5` olduğu için full response modunda yaklaşık olarak şu payload oluşmuştur:
+
+```text
+5 sonuç x yaklaşık 2 MB XML ≈ 10 MB response payload
+```
+
+## 6. Ölçüm Metrikleri
+
 | Metrik | Açıklama |
 |---|---|
-| Avg | Başarılı ölçümlerin ortalama süresi |
-| Min | En düşük başarılı ölçüm süresi |
-| Max | En yüksek başarılı ölçüm süresi |
-| P50 | Median latency |
-| P95 | 95. yüzdelik latency |
-| P99 | 99. yüzdelik latency |
-| Success | Başarılı measurement sayısı |
-| Error | Hatalı measurement sayısı |
-| Hit | Son başarılı sorguda bulunan toplam eşleşme sayısı |
-`samplesMs` ham ölçüm listesi rapor okunabilirliği için tablolara eklenmemiştir. Gerektiğinde API response çıktılarından veya ileride CSV/JSON export çıktılarından izlenmelidir.
-## 4. Test Bazlı Detaylı Sonuçlar
-### Test 1 — 10 doküman x 34 KB — tüm engine’ler
-- Kapsam: `All engines`
-- Doküman sayısı: `10`
-- Tekil XML boyutu: `34 KB`
-- Warm-up: `5`
-- Measurement: `20`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 3.10 | 3 | 5 | 3 | 3 | 5 | 20 | 0 | 10 |
-  | Elasticsearch | müşteri bilgileri | 3.05 | 3 | 4 | 3 | 3 | 4 | 20 | 0 | 10 |
-  | Elasticsearch | ödeme durumu | 2.65 | 2 | 4 | 3 | 3 | 4 | 20 | 0 | 10 |
-  | OpenSearch | fatura itiraz | 9.95 | 3 | 108 | 4 | 11 | 108 | 20 | 0 | 10 |
-  | OpenSearch | müşteri bilgileri | 3.30 | 2 | 6 | 3 | 5 | 6 | 20 | 0 | 10 |
-  | OpenSearch | ödeme durumu | 3.55 | 3 | 6 | 3 | 6 | 6 | 20 | 0 | 10 |
-  | Solr | fatura itiraz | 1.25 | 1 | 2 | 1 | 2 | 2 | 20 | 0 | 10 |
-  | Solr | müşteri bilgileri | 1.20 | 1 | 3 | 1 | 2 | 3 | 20 | 0 | 10 |
-  | Solr | ödeme durumu | 1.50 | 1 | 11 | 1 | 1 | 11 | 20 | 0 | 10 |
+| `avgMs` | Başarılı ölçümlerin ortalama süresi |
+| `minMs` | En düşük başarılı ölçüm |
+| `maxMs` | En yüksek başarılı ölçüm |
+| `p50Ms` | Median latency |
+| `p95Ms` | 95. yüzdelik latency |
+| `p99Ms` | 99. yüzdelik latency |
+| `successCount` | Başarılı measurement sayısı |
+| `errorCount` | Hatalı measurement sayısı |
+| `lastHitCount` | Son başarılı sorgudaki toplam eşleşme sayısı |
+| `lastResponseSizeKb` | Son başarılı response’un yaklaşık payload boyutu |
 
-Özet tablo:
+Latency ölçümleri double precision olarak tutulmuştur. Böylece özellikle Solr gibi 1 ms altına yaklaşan sonuçlarda integer milisaniye yuvarlama etkisi azaltılmıştır.
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 2.93 | 3.00 | 3.00 | 4.33 | 60 | 0 |
-| OpenSearch | 5.60 | 3.33 | 7.33 | 40.00 | 60 | 0 |
-| Solr | 1.32 | 1.00 | 1.67 | 5.33 | 60 | 0 |
+## 7. Test Matrisi
 
-Kısa yorum: Smoke test niteliğindedir. Üç engine de hatasız çalışmış, ancak küçük veri seti nedeniyle performans kararı için tek başına yeterli değildir.
+| Aşama | Dataset | Engine’ler | Amaç |
+|---|---|---|---|
+| Küçük test | 10 x 34 KB | Elasticsearch, OpenSearch, Solr | Smoke test ve temel entegrasyon doğrulama |
+| Orta test | 50 x 515 KB | Elasticsearch, OpenSearch, Solr | Orta ölçekte RAW/XML ve extracted farkını gözlemleme |
+| Büyük test | 100 x 2068 KB | Elasticsearch, Solr | Final büyük ölçek karşılaştırması |
+| Payload testi | 100 x 2068 KB | Elasticsearch, Solr | Metadata-only ve full XML response maliyetini ayırma |
 
-### Test 2 — 10 doküman x 515 KB — tüm engine’ler
-- Kapsam: `All engines`
-- Doküman sayısı: `10`
-- Tekil XML boyutu: `515 KB`
-- Warm-up: `5`
-- Measurement: `20`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 5.20 | 4 | 10 | 5 | 6 | 10 | 20 | 0 | 10 |
-  | Elasticsearch | müşteri bilgileri | 5.20 | 4 | 7 | 5 | 7 | 7 | 20 | 0 | 10 |
-  | Elasticsearch | ödeme durumu | 5.30 | 5 | 6 | 5 | 6 | 6 | 20 | 0 | 10 |
-  | OpenSearch | fatura itiraz | 20.95 | 9 | 151 | 14 | 18 | 151 | 20 | 0 | 10 |
-  | OpenSearch | müşteri bilgileri | 7.70 | 7 | 10 | 7 | 10 | 10 | 20 | 0 | 10 |
-  | OpenSearch | ödeme durumu | 7.70 | 6 | 10 | 7 | 10 | 10 | 20 | 0 | 10 |
-  | Solr | fatura itiraz | 1.00 | 1 | 1 | 1 | 1 | 1 | 20 | 0 | 10 |
-  | Solr | müşteri bilgileri | 1.00 | 1 | 1 | 1 | 1 | 1 | 20 | 0 | 10 |
-  | Solr | ödeme durumu | 0.95 | 0 | 1 | 1 | 1 | 1 | 20 | 0 | 10 |
+OpenSearch küçük ve orta testlerde değerlendirilmiştir. Büyük final testlerde lokal kaynak koşulları ve önceki bellek baskısı gözlemleri nedeniyle Elasticsearch + Solr izolasyonu tercih edilmiştir.
 
-Özet tablo:
+## 8. Küçük ve Orta Test Özeti
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 5.23 | 5.00 | 6.33 | 7.67 | 60 | 0 |
-| OpenSearch | 12.12 | 9.33 | 12.67 | 57.00 | 60 | 0 |
-| Solr | 0.98 | 1.00 | 1.00 | 1.00 | 60 | 0 |
+Küçük ve orta testler, sistemin uçtan uca doğru çalıştığını ve üç engine’in temel senaryolarda çalışabilir olduğunu doğrulamak için yapılmıştır.
 
-Kısa yorum: XML boyutu artırıldığında Elasticsearch ve OpenSearch tarafında latency artışı gözlenmiştir. OpenSearch’te fatura itiraz sorgusunda yüksek outlier görülmüştür.
+| Test | Engine | RAW_XML Avg/P95 | EXTRACTED Avg/P95 | Yorum |
+|---|---:|---:|---:|---|
+| Küçük | Elasticsearch | 3.87 / 7.76 ms | 3.62 / 5.32 ms | Fark düşük |
+| Küçük | OpenSearch | 5.94 / 9.25 ms | 5.45 / 7.95 ms | Fark düşük |
+| Küçük | Solr | 1.50 / 3.04 ms | 1.43 / 2.08 ms | Solr hızlı |
+| Orta | Elasticsearch | 7.76 / 15.34 ms | 13.85 / 28.56 ms | Extracted daha yavaş |
+| Orta | OpenSearch | 10.79 / 14.34 ms | 13.96 / 17.59 ms | Extracted daha yavaş |
+| Orta | Solr | 0.95 / 2.23 ms | 2.64 / 1.22 ms | Outlier etkisi mevcut |
 
-### Test 3 — 100 doküman x 515 KB — tüm engine’ler
-- Kapsam: `All engines`
-- Doküman sayısı: `100`
-- Tekil XML boyutu: `515 KB`
-- Warm-up: `5`
-- Measurement: `20`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 6.30 | 5 | 14 | 6 | 10 | 14 | 20 | 0 | 100 |
-  | Elasticsearch | müşteri bilgileri | 8.60 | 5 | 41 | 6 | 11 | 41 | 20 | 0 | 100 |
-  | Elasticsearch | ödeme durumu | 4.90 | 4 | 5 | 5 | 5 | 5 | 20 | 0 | 100 |
-  | OpenSearch | fatura itiraz | 8.30 | 7 | 11 | 8 | 11 | 11 | 20 | 0 | 100 |
-  | OpenSearch | müşteri bilgileri | 7.95 | 6 | 11 | 7 | 10 | 11 | 20 | 0 | 100 |
-  | OpenSearch | ödeme durumu | 8.00 | 6 | 11 | 7 | 10 | 11 | 20 | 0 | 100 |
-  | Solr | fatura itiraz | 0.95 | 0 | 2 | 1 | 1 | 2 | 20 | 0 | 100 |
-  | Solr | müşteri bilgileri | 0.95 | 0 | 2 | 1 | 1 | 2 | 20 | 0 | 100 |
-  | Solr | ödeme durumu | 0.40 | 0 | 1 | 0 | 1 | 1 | 20 | 0 | 100 |
+Küçük testlerde extracted yaklaşım bazı motorlarda küçük avantaj göstermiştir. Ancak orta ölçekte bu avantaj kaybolmuş, özellikle Elasticsearch ve OpenSearch tarafında extracted yaklaşım daha yüksek latency üretmiştir.
 
-Özet tablo:
+## 9. Büyük Final Test Sonuçları
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 6.60 | 5.67 | 8.67 | 20.00 | 60 | 0 |
-| OpenSearch | 8.08 | 7.33 | 10.33 | 11.00 | 60 | 0 |
-| Solr | 0.77 | 0.67 | 1.00 | 1.67 | 60 | 0 |
+Final büyük testler, 100 adet yaklaşık 2 MB XML dokümanı üzerinde Elasticsearch ve Solr ile yapılmıştır.
 
-Kısa yorum: Doküman sayısı 100’e çıkarılmıştır. Üç engine de hatasız çalışmıştır. OpenSearch bu testte daha stabil görünmüştür.
+### 9.1 RAW_XML + METADATA_ONLY
 
-### Test 4 — 10 doküman x 1032 KB — tüm engine’ler
-- Kapsam: `All engines`
-- Doküman sayısı: `10`
-- Tekil XML boyutu: `1032 KB`
-- Warm-up: `5`
-- Measurement: `20`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 8.80 | 7 | 14 | 8 | 13 | 14 | 20 | 0 | 10 |
-  | Elasticsearch | müşteri bilgileri | 12.20 | 8 | 53 | 9 | 20 | 53 | 20 | 0 | 10 |
-  | Elasticsearch | ödeme durumu | 8.95 | 7 | 16 | 8 | 14 | 16 | 20 | 0 | 10 |
-  | OpenSearch | fatura itiraz | 13.60 | 11 | 18 | 14 | 15 | 18 | 20 | 0 | 10 |
-  | OpenSearch | müşteri bilgileri | 14.10 | 11 | 26 | 14 | 15 | 26 | 20 | 0 | 10 |
-  | OpenSearch | ödeme durumu | 12.70 | 11 | 14 | 13 | 14 | 14 | 20 | 0 | 10 |
-  | Solr | fatura itiraz | 0.50 | 0 | 2 | 0 | 1 | 2 | 20 | 0 | 10 |
-  | Solr | müşteri bilgileri | 0.35 | 0 | 2 | 0 | 1 | 2 | 20 | 0 | 10 |
-  | Solr | ödeme durumu | 0.30 | 0 | 3 | 0 | 3 | 3 | 20 | 0 | 10 |
+| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Error |
+|---|---:|---:|---:|---:|---:|
+| Elasticsearch | 12.66 ms | 11.70 ms | 19.92 ms | 27.14 ms | 0 |
+| Solr | 1.12 ms | 1.04 ms | 1.79 ms | 2.44 ms | 0 |
 
-Özet tablo:
+Yorum:
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 9.98 | 8.33 | 15.67 | 27.67 | 60 | 0 |
-| OpenSearch | 13.47 | 13.67 | 14.67 | 19.33 | 60 | 0 |
-| Solr | 0.38 | 0.00 | 1.67 | 2.33 | 60 | 0 |
+- Solr, metadata-only RAW_XML aramada Elasticsearch’e göre belirgin biçimde daha düşük latency üretmiştir.
+- Elasticsearch daha yüksek latency üretmiş fakat hatasız ve kararlı çalışmıştır.
+- İki engine de 5 sorgu x 50 measurement = 250 başarılı ölçüm üretmiş, hata üretmemiştir.
 
-Kısa yorum: Tekil XML boyutu yaklaşık 1 MB seviyesine çıkarılmıştır. Solr’da 0 ms ölçümleri görülmeye başlamıştır; bu milisaniye ölçüm çözünürlüğünün sınırıdır.
+### 9.2 EXTRACTED_DOCUMENT + METADATA_ONLY
 
-### Test 5 — 10 doküman x 2068 KB — tüm engine’ler
-- Kapsam: `All engines`
-- Doküman sayısı: `10`
-- Tekil XML boyutu: `2068 KB`
-- Warm-up: `5`
-- Measurement: `20`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 16.90 | 12 | 69 | 13 | 26 | 69 | 20 | 0 | 10 |
-  | Elasticsearch | müşteri bilgileri | 12.50 | 11 | 25 | 11 | 20 | 25 | 20 | 0 | 10 |
-  | Elasticsearch | ödeme durumu | 12.25 | 11 | 20 | 11 | 19 | 20 | 20 | 0 | 10 |
-  | OpenSearch | fatura itiraz | 24.45 | 24 | 30 | 24 | 25 | 30 | 20 | 0 | 10 |
-  | OpenSearch | müşteri bilgileri | 25.40 | 25 | 28 | 25 | 26 | 28 | 20 | 0 | 10 |
-  | OpenSearch | ödeme durumu | 25.25 | 24 | 26 | 25 | 26 | 26 | 20 | 0 | 10 |
-  | Solr | fatura itiraz | 1.05 | 1 | 2 | 1 | 1 | 2 | 20 | 0 | 10 |
-  | Solr | müşteri bilgileri | 1.20 | 1 | 3 | 1 | 2 | 3 | 20 | 0 | 10 |
-  | Solr | ödeme durumu | 0.05 | 0 | 1 | 0 | 0 | 1 | 20 | 0 | 10 |
+| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Error |
+|---|---:|---:|---:|---:|---:|
+| Elasticsearch | 27.83 ms | 20.59 ms | 49.77 ms | 71.02 ms | 0 |
+| Solr | 1.20 ms | 0.98 ms | 2.11 ms | 3.92 ms | 0 |
 
-Özet tablo:
+Yorum:
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 13.88 | 11.67 | 21.67 | 38.00 | 60 | 0 |
-| OpenSearch | 25.03 | 24.67 | 25.67 | 28.00 | 60 | 0 |
-| Solr | 0.77 | 0.67 | 1.00 | 2.00 | 60 | 0 |
+- Elasticsearch tarafında `EXTRACTED_DOCUMENT`, `RAW_XML` yaklaşımına göre belirgin şekilde daha yavaş çalışmıştır.
+- Solr tarafında extracted yaklaşım RAW_XML’e yakın değerler üretmiş ancak daha iyi sonuç vermemiştir.
+- Bu haliyle extracted yaklaşım performans avantajı sağlamamıştır.
 
-Kısa yorum: Yaklaşık 2 MB XML boyutu ilk kez doğrulanmıştır. Üç engine de 10 dokümanda hatasız çalışmıştır.
+### 9.3 RAW_XML + FULL_XML_RESPONSE
 
-### Test 6 — 100 doküman x 2068 KB — tüm engine’ler
-- Kapsam: `All engines`
-- Doküman sayısı: `100`
-- Tekil XML boyutu: `2068 KB`
-- Warm-up: `5`
-- Measurement: `20`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 19.15 | 17 | 22 | 19 | 21 | 22 | 20 | 0 | 100 |
-  | Elasticsearch | müşteri bilgileri | 13.45 | 13 | 15 | 13 | 15 | 15 | 20 | 0 | 100 |
-  | Elasticsearch | ödeme durumu | 14.05 | 12 | 36 | 13 | 15 | 36 | 20 | 0 | 100 |
-  | OpenSearch | fatura itiraz | 52.30 | 22 | 230 | 32 | 116 | 230 | 20 | 0 | 100 |
-  | OpenSearch | müşteri bilgileri | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 20 | 0 |
-  | OpenSearch | ödeme durumu | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 20 | 0 |
-  | Solr | fatura itiraz | 3.25 | 1 | 12 | 3 | 5 | 12 | 20 | 0 | 100 |
-  | Solr | müşteri bilgileri | 1.90 | 1 | 3 | 2 | 3 | 3 | 20 | 0 | 100 |
-  | Solr | ödeme durumu | 1.60 | 1 | 3 | 1 | 3 | 3 | 20 | 0 | 100 |
+| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Ortalama Payload |
+|---|---:|---:|---:|---:|---:|
+| Elasticsearch | 76.08 ms | 75.14 ms | 88.07 ms | 107.59 ms | ~10340 KB |
+| Solr | 66.32 ms | 63.99 ms | 75.97 ms | 87.80 ms | ~10340 KB |
 
-Özet tablo:
+Yorum:
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 15.55 | 15.00 | 17.00 | 24.33 | 60 | 0 |
-| OpenSearch | 17.43 | 10.67 | 38.67 | 76.67 | 20 | 40 |
-| Solr | 2.25 | 2.00 | 3.67 | 6.00 | 60 | 0 |
+- Full XML response modunda iki engine’in latency değerleri ciddi şekilde artmıştır.
+- Solr metadata-only senaryoda yaklaşık 1 ms seviyesindeyken, full XML response senaryosunda yaklaşık 66 ms seviyesine çıkmıştır.
+- Bu sonuç, büyük XML içeriğinin search response içinde döndürülmesinin search latency ölçümünü baskıladığını göstermektedir.
+- Search endpointinin metadata-only çalışması, XML detayının ayrı endpoint üzerinden alınması daha doğru mimaridir.
 
-Kısa yorum: 100 adet yaklaşık 2 MB XML üzerinde Elasticsearch ve Solr hatasız çalışmıştır. OpenSearch yalnızca ilk sorguda başarılı olmuş; sonraki iki sorguda hata üretmiştir.
+## 10. RAW_XML ve EXTRACTED_DOCUMENT Karşılaştırması
 
-### Test 7 — 50 doküman x 2068 KB — tüm engine’ler
-- Kapsam: `All engines`
-- Doküman sayısı: `50`
-- Tekil XML boyutu: `2068 KB`
-- Warm-up: `5`
-- Measurement: `20`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 18.15 | 16 | 29 | 17 | 25 | 29 | 20 | 0 | 50 |
-  | Elasticsearch | müşteri bilgileri | 14.95 | 12 | 40 | 13 | 16 | 40 | 20 | 0 | 50 |
-  | Elasticsearch | ödeme durumu | 13.65 | 12 | 22 | 13 | 18 | 22 | 20 | 0 | 50 |
-  | OpenSearch | fatura itiraz | 49.53 | 21 | 169 | 48 | 169 | 169 | 19 | 1 | 50 |
-  | OpenSearch | müşteri bilgileri | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 20 | 0 |
-  | OpenSearch | ödeme durumu | 0.00 | 0 | 0 | 0 | 0 | 0 | 0 | 20 | 0 |
-  | Solr | fatura itiraz | 15.20 | 1 | 81 | 5 | 64 | 81 | 20 | 0 | 50 |
-  | Solr | müşteri bilgileri | 2.00 | 1 | 5 | 2 | 4 | 5 | 20 | 0 | 50 |
-  | Solr | ödeme durumu | 1.85 | 1 | 5 | 2 | 3 | 5 | 20 | 0 | 50 |
+Final büyük testte iki yaklaşımın ortalama sonuçları:
 
-Özet tablo:
+| Mod | Engine | Ortalama Avg | Ortalama P95 | Sonuç |
+|---|---:|---:|---:|---|
+| RAW_XML | Elasticsearch | 12.66 ms | 19.92 ms | Daha iyi |
+| EXTRACTED_DOCUMENT | Elasticsearch | 27.83 ms | 49.77 ms | Daha yavaş |
+| RAW_XML | Solr | 1.12 ms | 1.79 ms | Daha iyi |
+| EXTRACTED_DOCUMENT | Solr | 1.20 ms | 2.11 ms | Yakın fakat daha iyi değil |
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 15.58 | 14.33 | 19.67 | 30.33 | 60 | 0 |
-| OpenSearch | 16.51 | 16.00 | 56.33 | 56.33 | 19 | 41 |
-| Solr | 6.35 | 3.00 | 23.67 | 30.33 | 60 | 0 |
+Teknik yorum:
 
-Kısa yorum: 50 adet 2 MB XML seviyesinde de OpenSearch kararsızdır. Solr ilk sorguda outlier üretmiştir; bu nedenle izolasyon testi yapılmıştır.
+`EXTRACTED_DOCUMENT` yaklaşımında XML parse edilerek daha anlamlı alanlara ayrılmıştır. Ancak mevcut veri üretim yapısı ve query setinde aranan terimler birçok dokümanda ve birçok alanda tekrar ettiği için bu yaklaşım arama uzayını yeterince daraltmamıştır. Ayrıca çok alanlı arama, field boost ve skor birleştirme maliyeti oluşturmuştur. Bu nedenle parse edilmiş veri yapısı beklenen performans avantajını üretmemiştir.
 
-### Test 8 — 50 doküman x 2068 KB — Elasticsearch + Solr izolasyon
-- Kapsam: `ES + Solr isolation`
-- Doküman sayısı: `50`
-- Tekil XML boyutu: `2068 KB`
-- Warm-up: `5`
-- Measurement: `20`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 19.80 | 15 | 75 | 17 | 20 | 75 | 20 | 0 | 50 |
-  | Elasticsearch | müşteri bilgileri | 14.10 | 12 | 27 | 13 | 16 | 27 | 20 | 0 | 50 |
-  | Elasticsearch | ödeme durumu | 12.75 | 11 | 20 | 12 | 17 | 20 | 20 | 0 | 50 |
-  | Solr | fatura itiraz | 3.65 | 1 | 11 | 3 | 11 | 11 | 20 | 0 | 50 |
-  | Solr | müşteri bilgileri | 3.40 | 1 | 15 | 2 | 10 | 15 | 20 | 0 | 50 |
-  | Solr | ödeme durumu | 2.20 | 1 | 3 | 2 | 3 | 3 | 20 | 0 | 50 |
+`RAW_XML` yaklaşımı ise tek büyük text field üzerinde inverted index kullandığı için daha sade ve kararlı bir baseline sunmuştur.
 
-Özet tablo:
+## 11. Metadata-only ve Full XML Response Karşılaştırması
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 15.55 | 14.00 | 17.67 | 40.67 | 60 | 0 |
-| Solr | 3.08 | 2.33 | 8.00 | 9.67 | 60 | 0 |
+| Engine | Metadata-only Avg | Full XML Avg | Artış |
+|---|---:|---:|---:|
+| Elasticsearch | 12.66 ms | 76.08 ms | Yaklaşık 6.0x |
+| Solr | 1.12 ms | 66.32 ms | Yaklaşık 59.2x |
 
-Kısa yorum: OpenSearch devre dışı bırakıldığında Solr’daki outlier değerleri belirgin şekilde azalmıştır.
+Bu karşılaştırma, büyük XML payload taşımanın latency üzerindeki etkisini açık şekilde göstermektedir.
 
-### Test 9 — 100 doküman x 2068 KB — Elasticsearch + Solr izolasyon
-- Kapsam: `ES + Solr isolation`
-- Doküman sayısı: `100`
-- Tekil XML boyutu: `2068 KB`
-- Warm-up: `5`
-- Measurement: `20`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 19.15 | 14 | 78 | 16 | 21 | 78 | 20 | 0 | 100 |
-  | Elasticsearch | müşteri bilgileri | 13.45 | 11 | 35 | 12 | 14 | 35 | 20 | 0 | 100 |
-  | Elasticsearch | ödeme durumu | 14.55 | 11 | 40 | 12 | 23 | 40 | 20 | 0 | 100 |
-  | Solr | fatura itiraz | 2.25 | 1 | 8 | 1 | 6 | 8 | 20 | 0 | 100 |
-  | Solr | müşteri bilgileri | 2.90 | 1 | 16 | 2 | 5 | 16 | 20 | 0 | 100 |
-  | Solr | ödeme durumu | 1.45 | 1 | 4 | 1 | 3 | 4 | 20 | 0 | 100 |
+Özellikle Solr tarafında search işlemi metadata-only durumda çok hızlıdır. Ancak full XML response senaryosunda latency’nin büyük bölümü response serialization, transfer ve parse maliyetinden kaynaklanır.
 
-Özet tablo:
+Önerilen mimari:
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 15.72 | 13.33 | 19.33 | 51.00 | 60 | 0 |
-| Solr | 2.20 | 1.33 | 4.67 | 9.33 | 60 | 0 |
+```text
+Search endpoint:
+- workflowCode
+- workflowName
+- domain
+- status
+- score
+- xmlSizeKb
 
-Kısa yorum: Ana 100 doküman x 2 MB izolasyon testinde Elasticsearch ve Solr 60/60 başarılıdır. Solr daha düşük latency üretmiştir.
+Detail endpoint:
+- seçilen workflow için full XML content
+```
 
-### Test 10 — 100 doküman x 2068 KB — Elasticsearch + Solr, 100 measurement
-- Kapsam: `ES + Solr isolation`
-- Doküman sayısı: `100`
-- Tekil XML boyutu: `2068 KB`
-- Warm-up: `10`
-- Measurement: `100`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 13.26 | 11 | 29 | 12 | 17 | 20 | 100 | 0 | 100 |
-  | Elasticsearch | müşteri bilgileri | 11.69 | 10 | 18 | 11 | 14 | 16 | 100 | 0 | 100 |
-  | Elasticsearch | ödeme durumu | 12.16 | 11 | 29 | 12 | 15 | 19 | 100 | 0 | 100 |
-  | Solr | fatura itiraz | 0.99 | 0 | 4 | 1 | 2 | 3 | 100 | 0 | 100 |
-  | Solr | müşteri bilgileri | 1.10 | 0 | 6 | 1 | 3 | 5 | 100 | 0 | 100 |
-  | Solr | ödeme durumu | 0.61 | 0 | 2 | 1 | 1 | 2 | 100 | 0 | 100 |
+## 12. OpenSearch Değerlendirmesi
 
-Özet tablo:
+OpenSearch küçük ve orta testlerde çalışmıştır. Ancak büyük XML yüklerinde lokal kaynak koşulları altında ana final testlere dahil edilmemiştir.
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 12.37 | 11.67 | 15.33 | 18.33 | 300 | 0 |
-| Solr | 0.90 | 1.00 | 2.00 | 3.33 | 300 | 0 |
+Bu kararın nedeni:
 
-Kısa yorum: 20 measurement sonucunu doğrulamak için 100 measurement ile tekrar test edilmiştir. Sonuç yönü değişmemiştir.
+- OpenSearch’ün Elasticsearch’e benzer JVM tabanlı çalışma modeli nedeniyle lokal Docker ortamında ek bellek baskısı oluşturması
+- Büyük XML testlerinde önceki denemelerde kararsızlık gözlenmesi
+- Final karşılaştırmada Elasticsearch baseline ile Solr alternatifinin izole şekilde ölçülmek istenmesi
 
-### Test 11 — 250 doküman x 2068 KB — Elasticsearch + Solr, 100 measurement
-- Kapsam: `ES + Solr isolation`
-- Doküman sayısı: `250`
-- Tekil XML boyutu: `2068 KB`
-- Warm-up: `10`
-- Measurement: `100`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 13.88 | 11 | 43 | 12 | 21 | 29 | 100 | 0 | 250 |
-  | Elasticsearch | müşteri bilgileri | 11.27 | 9 | 21 | 11 | 13 | 18 | 100 | 0 | 250 |
-  | Elasticsearch | ödeme durumu | 11.41 | 10 | 29 | 11 | 14 | 21 | 100 | 0 | 250 |
-  | Solr | fatura itiraz | 0.40 | 0 | 2 | 0 | 1 | 1 | 100 | 0 | 250 |
-  | Solr | müşteri bilgileri | 0.24 | 0 | 3 | 0 | 1 | 2 | 100 | 0 | 250 |
-  | Solr | ödeme durumu | 0.14 | 0 | 1 | 0 | 1 | 1 | 100 | 0 | 250 |
+Bu sonuç OpenSearch’ün production ortamında uygun olmadığı anlamına gelmez. Sadece bu lokal PoC ortamında büyük XML yükü altında final ölçüm için tercih edilmemiştir.
 
-Özet tablo:
+## 13. Relevance Açısından İlk Değerlendirme
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 12.19 | 11.33 | 16.00 | 22.67 | 300 | 0 |
-| Solr | 0.26 | 0.00 | 1.00 | 1.33 | 300 | 0 |
+Bu çalışma öncelikle latency benchmark çalışmasıdır. Sistematik relevance metriği hesaplanmamıştır.
 
-Kısa yorum: Yaklaşık 517 MB ham XML hacmi altında Elasticsearch ve Solr hatasız çalışmıştır. Solr değerleri milisaniye çözünürlüğünün altına yaklaşmıştır.
+Ancak temel kontrol amacıyla aynı query’lerde dönen sonuçlar incelenmiştir. Sentetik veri setinde domain bazlı sorgular beklenen workflow gruplarını üst sıralara getirmiştir.
 
-### Test 12 — 500 doküman x 2068 KB — Elasticsearch + Solr, 100 measurement
-- Kapsam: `ES + Solr isolation`
-- Doküman sayısı: `500`
-- Tekil XML boyutu: `2068 KB`
-- Warm-up: `10`
-- Measurement: `100`
-  | Engine | Query | Avg | Min | Max | P50 | P95 | P99 | Success | Error | Hit |
-  |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-  | Elasticsearch | fatura itiraz | 14.08 | 10 | 64 | 12 | 19 | 44 | 100 | 0 | 500 |
-  | Elasticsearch | müşteri bilgileri | 12.18 | 9 | 33 | 11 | 18 | 24 | 100 | 0 | 500 |
-  | Elasticsearch | ödeme durumu | 11.41 | 9 | 22 | 11 | 17 | 20 | 100 | 0 | 500 |
-  | Solr | fatura itiraz | 0.07 | 0 | 1 | 0 | 1 | 1 | 100 | 0 | 500 |
-  | Solr | müşteri bilgileri | 0.01 | 0 | 1 | 0 | 0 | 0 | 100 | 0 | 500 |
-  | Solr | ödeme durumu | 0.06 | 0 | 3 | 0 | 0 | 1 | 100 | 0 | 500 |
+| Sorgu | Beklenen Domain |
+|---|---|
+| fatura itiraz | Billing |
+| müşteri bilgileri | Customer |
+| ödeme durumu | Payment |
+| abonelik iptal | Subscription |
+| arıza kaydı | Technical Support |
 
-Özet tablo:
+Bu kontrol, düşük latency değerlerinin tamamen anlamsız sonuçlardan kaynaklanmadığını göstermektedir. Ancak production seviyesi karar için gerçek query logları ve beklenen sonuç listeleriyle precision/recall veya NDCG gibi relevance metrikleri ayrıca ölçülmelidir.
 
-| Engine | Ortalama Avg | Ortalama P50 | Ortalama P95 | Ortalama P99 | Başarı | Hata |
-|---|---:|---:|---:|---:|---:|---:|
-| Elasticsearch | 12.56 | 11.33 | 18.00 | 29.33 | 300 | 0 |
-| Solr | 0.05 | 0.00 | 0.33 | 0.67 | 300 | 0 |
+## 14. Sınırlılıklar
 
-Kısa yorum: Yaklaşık 1 GB ham XML hacmi altında iki engine de hatasız çalışmıştır. Solr çok hızlı görünmekle birlikte çok sayıda 0 ms değeri, ölçüm çözünürlüğü sınırını göstermektedir.
+Bu benchmark aşağıdaki sınırlılıklara sahiptir:
 
-## 5. Temel Relevance Kontrolü
-Solr’ın düşük latency değerlerinin arama sonucunun anlamlılığından kopuk olup olmadığını görmek için Elasticsearch ve Solr, 100 adet yaklaşık 2 MB XML dokümanı üzerinde aynı üç sorgu ile karşılaştırılmıştır. Üç sorguda da iki engine aynı top-5 workflow listesini döndürmüştür.
-| Sorgu | Elasticsearch Top-5 | Solr Top-5 |
-|---|---|---|
-| fatura itiraz | WF_BILLING_1, WF_BILLING_6, WF_BILLING_11, WF_BILLING_16, WF_BILLING_21 | WF_BILLING_1, WF_BILLING_6, WF_BILLING_11, WF_BILLING_16, WF_BILLING_21 |
-| müşteri bilgileri | WF_CUSTOMER_2, WF_CUSTOMER_7, WF_CUSTOMER_12, WF_CUSTOMER_17, WF_CUSTOMER_22 | WF_CUSTOMER_2, WF_CUSTOMER_7, WF_CUSTOMER_12, WF_CUSTOMER_17, WF_CUSTOMER_22 |
-| ödeme durumu | WF_PAYMENT_5, WF_PAYMENT_10, WF_PAYMENT_15, WF_PAYMENT_20, WF_PAYMENT_25 | WF_PAYMENT_5, WF_PAYMENT_10, WF_PAYMENT_15, WF_PAYMENT_20, WF_PAYMENT_25 |
+- Testler lokal single-node Docker ortamında yapılmıştır.
+- Veri seti sentetiktir.
+- Query seti sınırlıdır.
+- Aynı query’lerin tekrar edilmesi cache etkisi oluşturabilir.
+- Production cluster, shard/replica, gerçek trafik ve gerçek kullanıcı query logları test edilmemiştir.
+- Relevance ölçümü sistematik metriklerle yapılmamıştır.
+- Network gecikmesi, distributed cluster davranışı ve production resource isolation kapsam dışıdır.
 
-Bu kontrol production seviyesinde relevance değerlendirmesi değildir. Ancak Solr’ın düşük latency değerlerinin temel sonuç kalitesinden tamamen kopuk olmadığını gösterir.
-## 6. Genel Değerlendirme
-- Elasticsearch, küçük ve büyük tüm RAW_XML testlerinde kararlı baseline davranışı göstermiştir. 500 adet yaklaşık 2 MB XML dokümanı üzerinde de 300/300 başarılı ölçüm alınmıştır.
-- Solr, tüm başarılı senaryolarda Elasticsearch’e göre belirgin biçimde daha düşük latency üretmiştir. 100/250/500 dokümanlık ölçek doğrulama testlerinde hata üretmemiştir.
-- Solr sonuçlarında 250 ve 500 dokümanlık testlerde çok sayıda 0 ms ölçüm görülmüştür. Bu, Solr’ın gerçekten sıfır sürede çalıştığı anlamına gelmez; ölçüm milisaniye çözünürlüğünde tutulduğu için 1 ms altındaki süreler 0 olarak görünmektedir. Bu nedenle Solr performansı yorumlanırken ölçüm çözünürlüğü sınırı açıkça belirtilmelidir.
-- Son testlerde aynı sorguların 100 kez tekrarlanması, JVM/JIT ısınması, OS filesystem cache, Lucene segmentlerinin bellekte sıcak hale gelmesi ve Solr query/result cache etkisi yaratmış olabilir. Bu nedenle 100/250/500 dokümanlık son testler warm-cache repeated-query benchmark olarak değerlendirilmelidir.
-- OpenSearch küçük ve orta ölçekli testlerde çalışmıştır; ancak yaklaşık 2 MB XML dokümanlarıyla yapılan 50 ve 100 dokümanlık RAW_XML testlerinde kararlı sonuç üretmemiştir. 1 GB heap ile reindex sırasında circuit breaker görülmüş, 2 GB heap ile reindex başarılı olsa da search aşamasındaki hata davranışı devam etmiştir.
-- RAW_XML yaklaşımı mevcut sistemi temsil etmek için doğru başlangıçtır; ancak uzun vadede XML’in parse edilerek daha anlamlı EXTRACTED_DOCUMENT yapısıyla indexlenmesi relevance ve kontrol edilebilirlik açısından ayrıca test edilmelidir.
-## 7. Sonuç
-Bu aşamada proje, RAW_XML metadata-only benchmark senaryosu için çalışan ve raporlanabilir bir PoC seviyesine ulaşmıştır. Elasticsearch kararlı baseline olarak korunabilir; Solr bu problem özelinde güçlü ve düşük latency üreten bir alternatif olarak öne çıkmaktadır; OpenSearch ise mevcut lokal kaynak ve heap ayarları altında büyük RAW_XML yüklerinde riskli görünmektedir. Nihai karar için production-like cluster ortamı, gerçek query logları, full XML response maliyeti ve sistematik relevance ölçümleri gereklidir.
-## 8. Sonraki Adımlar
-1. EXTRACTED_DOCUMENT modunu 100/250/500 dokümanlık seçili veri setlerinde test etmek.
-2. Full XML response ile metadata-only response maliyetini ayırmak.
-3. CSV/JSON benchmark export mekanizması eklemek.
-4. Daha gerçekçi ve çeşitli query seti oluşturmak.
-5. Relevance metrikleri için beklenen sonuç listesi hazırlamak.
-6. Bulk indexing optimizasyonunu değerlendirmek.
-7. Production-like cluster ortamında doğrulama yapmak.
+Bu nedenle sonuçlar production kararı değil, PoC seviyesinde teknik yön gösterici benchmark sonucu olarak değerlendirilmelidir.
+
+## 15. Genel Sonuç
+
+Bu çalışma sonucunda XML workflow dokümanları üzerinde Elasticsearch, OpenSearch ve Apache Solr için tekrar edilebilir bir benchmark altyapısı geliştirilmiştir.
+
+Elde edilen temel sonuçlar:
+
+1. Apache Solr, metadata-only RAW_XML aramada en düşük latency değerlerini üretmiştir.
+2. Elasticsearch, Solr’a göre daha yavaş olmakla birlikte kararlı baseline olarak çalışmıştır.
+3. OpenSearch küçük ve orta testlerde gözlemlenmiş; büyük final benchmarkta lokal kaynak koşulları nedeniyle dışarıda bırakılmıştır.
+4. RAW_XML yaklaşımı, mevcut sistem davranışına yakın ve kararlı bir baseline sağlamıştır.
+5. EXTRACTED_DOCUMENT yaklaşımı mevcut haliyle genel performans avantajı sağlamamıştır.
+6. FULL_XML_RESPONSE, latency değerlerini ciddi şekilde artırmıştır.
+7. Search endpointinin metadata-only çalışması ve XML detayının ayrı endpoint ile alınması önerilmektedir.
+
+## 16. Sonraki Adımlar
+
+İleride yapılabilecek çalışmalar:
+
+1. Gerçek production query loglarına yakın query seti oluşturmak
+2. Sistematik relevance metriği eklemek
+3. Bulk indexing optimizasyonu yapmak
+4. Production-like cluster ortamında testleri tekrarlamak
+5. OpenSearch’ü daha yüksek heap ve izole kaynaklarla yeniden değerlendirmek
+6. EXTRACTED_DOCUMENT alanlarını daha seçici hale getirmek
+7. `searchText` alanını küçültüp field-specific query senaryolarını ayrıca test etmek
+8. XML detail endpoint tasarımıyla metadata-only search mimarisini tamamlamak
+
+## 17. Final Teknik Karar
+
+Bu PoC kapsamında en güçlü teknik öneri şudur:
+
+```text
+Arama endpointi metadata-only çalışmalı.
+Büyük XML içeriği search response içinde döndürülmemeli.
+Solr, metadata-only RAW_XML arama için güçlü bir alternatif olarak değerlendirilmelidir.
+Elasticsearch mevcut sistem baseline’ı olarak korunabilir.
+EXTRACTED_DOCUMENT yaklaşımı performans için değil, ileride relevance ve kontrol edilebilirlik amacıyla yeniden tasarlanarak ele alınmalıdır.
+```
