@@ -2,6 +2,7 @@ package com.recepoztrk.xmlworkflowsearchbenchmark.search.solr;
 
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.IndexOperationResult;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.ResponseMode;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchEngineResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchHitDto;
@@ -18,10 +19,12 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Apache Solr entegrasyon servisi.
@@ -35,6 +38,10 @@ import java.util.Map;
  * - XML parse edilir.
  * - SearchDocument alanları Solr'a aktarılır.
  * - Arama workflowName, screenTitles, descriptions, actions, searchText gibi alanlarda yapılır.
+ *
+ * ResponseMode:
+ * - METADATA_ONLY: Search sonucunda sadece metadata alanları döndürülür.
+ * - FULL_XML_RESPONSE: Metadata alanlarına ek olarak xmlContent_txt de döndürülür.
  */
 @Service
 public class SolrService implements SearchEngineClient {
@@ -122,11 +129,19 @@ public class SolrService implements SearchEngineClient {
     }
 
     /**
-     * Seçilen moda göre Solr üzerinde arama yapar.
+     * Seçilen SearchMode ve ResponseMode'a göre Solr üzerinde arama yapar.
      */
     @Override
-    public SearchEngineResult search(String query, int limit, SearchMode mode) {
+    public SearchEngineResult search(
+            String query,
+            int limit,
+            SearchMode mode,
+            ResponseMode responseMode
+    ) {
         SearchMode effectiveMode = mode == null ? SearchMode.RAW_XML : mode;
+        ResponseMode effectiveResponseMode = responseMode == null
+                ? ResponseMode.METADATA_ONLY
+                : responseMode;
 
         String queryFields = effectiveMode == SearchMode.RAW_XML
                 ? "xmlContent_txt"
@@ -142,7 +157,7 @@ public class SolrService implements SearchEngineClient {
                         .queryParam("qf", queryFields)
                         .queryParam("fq", "status_s:ACTIVE")
                         .queryParam("rows", limit)
-                        .queryParam("fl", "id,score,workflowCode_s,workflowName_txt,status_s,domain_s,xmlSizeKb_i")
+                        .queryParam("fl", fieldList(effectiveResponseMode))
                         .queryParam("wt", "json")
                         .build(collectionName))
                 .retrieve()
@@ -305,6 +320,19 @@ public class SolrService implements SearchEngineClient {
                 .toBodilessEntity();
     }
 
+    /**
+     * ResponseMode'a göre Solr select response içinde dönecek field listesini belirler.
+     */
+    private String fieldList(ResponseMode responseMode) {
+        String fields = "id,score,workflowCode_s,workflowName_txt,status_s,domain_s,xmlSizeKb_i";
+
+        if (responseMode == ResponseMode.FULL_XML_RESPONSE) {
+            fields += ",xmlContent_txt";
+        }
+
+        return fields;
+    }
+
     private String joinTexts(List<String> values) {
         if (values == null || values.isEmpty()) {
             return "";
@@ -349,6 +377,16 @@ public class SolrService implements SearchEngineClient {
         return fieldNode.asInt();
     }
 
+    private String readNullableStringField(JsonNode node, String fieldName) {
+        String value = readStringField(node, fieldName);
+
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        return value;
+    }
+
     private SearchEngineResult parseSearchResponse(String query, long tookMs, String responseBody) {
         try {
             JsonNode root = jsonMapper.readTree(responseBody);
@@ -359,6 +397,10 @@ public class SolrService implements SearchEngineClient {
             List<SearchHitDto> hits = new ArrayList<>();
 
             for (JsonNode docNode : responseNode.path("docs")) {
+                String xmlContent = readNullableStringField(docNode, "xmlContent_txt");
+
+                Integer responseSizeKb = calculateHitResponseSizeKb(docNode, xmlContent);
+
                 hits.add(new SearchHitDto(
                         readStringField(docNode, "id"),
                         docNode.path("score").asDouble(),
@@ -366,19 +408,48 @@ public class SolrService implements SearchEngineClient {
                         readStringField(docNode, "workflowName_txt"),
                         readStringField(docNode, "status_s"),
                         readStringField(docNode, "domain_s"),
-                        readIntegerField(docNode, "xmlSizeKb_i")
+                        readIntegerField(docNode, "xmlSizeKb_i"),
+                        xmlContent,
+                        responseSizeKb
                 ));
             }
+
+            int totalResponseSizeKb = hits.stream()
+                    .map(SearchHitDto::responseSizeKb)
+                    .filter(Objects::nonNull)
+                    .mapToInt(Integer::intValue)
+                    .sum();
 
             return new SearchEngineResult(
                     ENGINE_NAME,
                     query,
                     tookMs,
                     totalHits,
+                    totalResponseSizeKb,
                     hits
             );
         } catch (Exception exception) {
             throw new IllegalStateException("Solr search response parse edilemedi.", exception);
         }
+    }
+
+    private Integer calculateHitResponseSizeKb(JsonNode docNode, String xmlContent) {
+        String approximatePayload = readStringField(docNode, "id")
+                + readStringField(docNode, "workflowCode_s")
+                + readStringField(docNode, "workflowName_txt")
+                + readStringField(docNode, "status_s")
+                + readStringField(docNode, "domain_s")
+                + readIntegerField(docNode, "xmlSizeKb_i")
+                + (xmlContent == null ? "" : xmlContent);
+
+        return calculateSizeKb(approximatePayload);
+    }
+
+    private Integer calculateSizeKb(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+
+        return value.getBytes(StandardCharsets.UTF_8).length / 1024;
     }
 }

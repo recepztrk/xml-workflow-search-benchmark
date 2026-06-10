@@ -1,6 +1,7 @@
 package com.recepoztrk.xmlworkflowsearchbenchmark.search.client;
 
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.IndexOperationResult;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.ResponseMode;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchEngineResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchMode;
 
@@ -28,8 +29,24 @@ public interface SearchEngineClient {
      * parse edilmiş SearchDocument yaklaşımıyla çalışır.
      */
     default SearchEngineResult search(String query, int limit) {
-        return search(query, limit, SearchMode.EXTRACTED_DOCUMENT);
+        return search(query, limit, SearchMode.EXTRACTED_DOCUMENT, ResponseMode.METADATA_ONLY);
     }
 
-    SearchEngineResult search(String query, int limit, SearchMode mode);
+    /**
+     * Eski üç parametreli çağrıları bozmamak için responseMode varsayılan olarak METADATA_ONLY alınır.
+     */
+    default SearchEngineResult search(String query, int limit, SearchMode mode) {
+        return search(query, limit, mode, ResponseMode.METADATA_ONLY);
+    }
+
+    /**
+     * mode:
+     * - RAW_XML
+     * - EXTRACTED_DOCUMENT
+     *
+     * responseMode:
+     * - METADATA_ONLY
+     * - FULL_XML_RESPONSE
+     */
+    SearchEngineResult search(String query, int limit, SearchMode mode, ResponseMode responseMode);
 }

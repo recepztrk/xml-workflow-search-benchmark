@@ -1,5 +1,8 @@
 package com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model;
 
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.ResponseMode;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchMode;
+
 import java.util.List;
 
 /**
@@ -8,12 +11,31 @@ import java.util.List;
 public record BenchmarkMeasurementResult(
         String engine,
         String query,
+
+        /**
+         * Aramanın hangi doküman stratejisiyle yapıldığını gösterir.
+         * RAW_XML veya EXTRACTED_DOCUMENT.
+         */
+        SearchMode searchMode,
+
+        /**
+         * Search sonucunda sadece metadata mı yoksa full XML de mi döndürüldüğünü gösterir.
+         */
+        ResponseMode responseMode,
+
         int limit,
         int warmupIterations,
         int measurementIterations,
         int successCount,
         int errorCount,
         int lastHitCount,
+
+        /**
+         * Son başarılı search response'unun yaklaşık toplam payload boyutu.
+         * METADATA_ONLY modunda düşük, FULL_XML_RESPONSE modunda XML boyutuna bağlı yüksek olur.
+         */
+        Integer lastResponseSizeKb,
+
         double avgMs,
         long minMs,
         long maxMs,

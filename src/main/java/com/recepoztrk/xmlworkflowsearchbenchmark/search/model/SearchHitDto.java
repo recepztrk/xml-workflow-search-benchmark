@@ -10,6 +10,18 @@ public record SearchHitDto(
         String workflowName,
         String status,
         String domain,
-        Integer xmlSizeKb
+        Integer xmlSizeKb,
+
+        /**
+         * Sadece FULL_XML_RESPONSE modunda dolar.
+         * METADATA_ONLY modunda null döner.
+         */
+        String xmlContent,
+
+        /**
+         * Bu hit'in yaklaşık response payload boyutu.
+         * METADATA_ONLY için küçük, FULL_XML_RESPONSE için xmlContent'e bağlı büyük olur.
+         */
+        Integer responseSizeKb
 ) {
 }

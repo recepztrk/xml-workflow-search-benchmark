@@ -6,6 +6,7 @@ import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model.BenchmarkRunReq
 import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model.BenchmarkRunResponse;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.IndexOperationResult;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.ResponseMode;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchEngineResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchMode;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import java.util.stream.Collectors;
  * - Warm-up iteration çalıştırır.
  * - Measurement iteration çalıştırır.
  * - avg, min, max, p50, p95, p99 değerlerini hesaplar.
+ * - METADATA_ONLY ve FULL_XML_RESPONSE response modlarını destekler.
  */
 @Service
 @RequiredArgsConstructor
@@ -33,6 +35,7 @@ public class BenchmarkService {
     private static final int DEFAULT_WARMUP_ITERATIONS = 5;
     private static final int DEFAULT_MEASUREMENT_ITERATIONS = 30;
     private static final SearchMode DEFAULT_SEARCH_MODE = SearchMode.RAW_XML;
+    private static final ResponseMode DEFAULT_RESPONSE_MODE = ResponseMode.METADATA_ONLY;
 
     private static final List<String> DEFAULT_QUERIES = List.of(
             "fatura itiraz",
@@ -75,6 +78,9 @@ public class BenchmarkService {
         int warmupIterations = normalizedRequest.warmupIterations();
         int measurementIterations = normalizedRequest.measurementIterations();
 
+        SearchMode searchMode = normalizedRequest.mode();
+        ResponseMode responseMode = normalizedRequest.responseMode();
+
         List<SearchEngineClient> selectedClients = resolveClients(normalizedRequest.engines());
 
         List<BenchmarkMeasurementResult> results = new ArrayList<>();
@@ -87,7 +93,8 @@ public class BenchmarkService {
                         limit,
                         warmupIterations,
                         measurementIterations,
-                        normalizedRequest.mode()
+                        searchMode,
+                        responseMode
                 );
 
                 results.add(measurementResult);
@@ -101,7 +108,8 @@ public class BenchmarkService {
                 limit,
                 warmupIterations,
                 measurementIterations,
-                normalizedRequest.mode(),
+                searchMode,
+                responseMode,
                 results
         );
     }
@@ -112,7 +120,8 @@ public class BenchmarkService {
             int limit,
             int warmupIterations,
             int measurementIterations,
-            SearchMode mode
+            SearchMode searchMode,
+            ResponseMode responseMode
     ) {
         /*
          * Warm-up:
@@ -121,7 +130,7 @@ public class BenchmarkService {
          */
         for (int i = 0; i < warmupIterations; i++) {
             try {
-                client.search(query, limit, mode);
+                client.search(query, limit, searchMode, responseMode);
             } catch (Exception ignored) {
                 // Warm-up hataları ölçüme dahil edilmiyor.
             }
@@ -130,13 +139,16 @@ public class BenchmarkService {
         List<Long> samples = new ArrayList<>();
         int errorCount = 0;
         int lastHitCount = 0;
+        Integer lastResponseSizeKb = 0;
         String lastErrorMessage = null;
 
         for (int i = 0; i < measurementIterations; i++) {
             try {
-                SearchEngineResult result = client.search(query, limit, mode);
+                SearchEngineResult result = client.search(query, limit, searchMode, responseMode);
+
                 samples.add(result.tookMs());
                 lastHitCount = result.hitCount();
+                lastResponseSizeKb = result.responseSizeKb();
             } catch (Exception exception) {
                 errorCount++;
                 lastErrorMessage = extractErrorMessage(exception);
@@ -147,11 +159,14 @@ public class BenchmarkService {
             return new BenchmarkMeasurementResult(
                     client.engineName(),
                     query,
+                    searchMode,
+                    responseMode,
                     limit,
                     warmupIterations,
                     measurementIterations,
                     0,
                     errorCount,
+                    0,
                     0,
                     0,
                     0,
@@ -179,12 +194,15 @@ public class BenchmarkService {
         return new BenchmarkMeasurementResult(
                 client.engineName(),
                 query,
+                searchMode,
+                responseMode,
                 limit,
                 warmupIterations,
                 measurementIterations,
                 samples.size(),
                 errorCount,
                 lastHitCount,
+                lastResponseSizeKb,
                 round(avg),
                 min,
                 max,
@@ -204,7 +222,8 @@ public class BenchmarkService {
                     DEFAULT_LIMIT,
                     DEFAULT_WARMUP_ITERATIONS,
                     DEFAULT_MEASUREMENT_ITERATIONS,
-                    DEFAULT_SEARCH_MODE
+                    DEFAULT_SEARCH_MODE,
+                    DEFAULT_RESPONSE_MODE
             );
         }
 
@@ -227,9 +246,13 @@ public class BenchmarkService {
                 ? DEFAULT_MEASUREMENT_ITERATIONS
                 : request.measurementIterations();
 
-        SearchMode mode = request.mode() == null
+        SearchMode searchMode = request.mode() == null
                 ? DEFAULT_SEARCH_MODE
                 : request.mode();
+
+        ResponseMode responseMode = request.responseMode() == null
+                ? DEFAULT_RESPONSE_MODE
+                : request.responseMode();
 
         return new BenchmarkRunRequest(
                 engines,
@@ -237,7 +260,8 @@ public class BenchmarkService {
                 limit,
                 warmupIterations,
                 measurementIterations,
-                mode
+                searchMode,
+                responseMode
         );
     }
 

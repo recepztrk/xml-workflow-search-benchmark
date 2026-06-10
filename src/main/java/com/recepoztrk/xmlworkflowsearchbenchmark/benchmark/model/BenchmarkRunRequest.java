@@ -1,6 +1,7 @@
 package com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model;
 
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchMode;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.ResponseMode;
 
 import java.util.List;
 
@@ -10,6 +11,10 @@ import java.util.List;
  * mode:
  * - RAW_XML: Mevcut sistem yaklaşımı. XML parse edilmeden xmlContent üzerinde arama yapılır.
  * - EXTRACTED_DOCUMENT: XML parse edilerek oluşturulan SearchDocument alanlarında arama yapılır.
+ *
+ * responseMode:
+ * - METADATA_ONLY: Search sonucunda sadece metadata döner.
+ * - FULL_XML_RESPONSE: Search sonucunda metadata + xmlContent döner.
  */
 public record BenchmarkRunRequest(
         List<String> engines,
@@ -17,6 +22,7 @@ public record BenchmarkRunRequest(
         Integer limit,
         Integer warmupIterations,
         Integer measurementIterations,
-        SearchMode mode
+        SearchMode mode,
+        ResponseMode responseMode
 ) {
 }

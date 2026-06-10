@@ -2,6 +2,7 @@ package com.recepoztrk.xmlworkflowsearchbenchmark.search.opensearch;
 
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.client.SearchEngineClient;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.IndexOperationResult;
+import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.ResponseMode;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchDocument;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchEngineResult;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchHitDto;
@@ -16,10 +17,12 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * OpenSearch alternatif arama motoru entegrasyon servisi.
@@ -33,6 +36,10 @@ import java.util.Map;
  * - XML parse edilir.
  * - SearchDocument alanları OpenSearch'e aktarılır.
  * - Arama workflowName, screenTitles, descriptions, actions ve searchText gibi alanlarda yapılır.
+ *
+ * ResponseMode:
+ * - METADATA_ONLY: Search sonucunda sadece metadata alanları döndürülür.
+ * - FULL_XML_RESPONSE: Metadata alanlarına ek olarak xmlContent de döndürülür.
  */
 @Service
 public class OpenSearchService implements SearchEngineClient {
@@ -120,15 +127,23 @@ public class OpenSearchService implements SearchEngineClient {
     }
 
     /**
-     * Seçilen moda göre OpenSearch üzerinde full-text search çalıştırır.
+     * Seçilen SearchMode ve ResponseMode'a göre OpenSearch üzerinde free-text / full-text search çalıştırır.
      */
     @Override
-    public SearchEngineResult search(String query, int limit, SearchMode mode) {
+    public SearchEngineResult search(
+            String query,
+            int limit,
+            SearchMode mode,
+            ResponseMode responseMode
+    ) {
         SearchMode effectiveMode = mode == null ? SearchMode.RAW_XML : mode;
+        ResponseMode effectiveResponseMode = responseMode == null
+                ? ResponseMode.METADATA_ONLY
+                : responseMode;
 
         Map<String, Object> requestBody = effectiveMode == SearchMode.RAW_XML
-                ? createRawXmlSearchRequest(query, limit)
-                : createExtractedSearchRequest(query, limit);
+                ? createRawXmlSearchRequest(query, limit, effectiveResponseMode)
+                : createExtractedSearchRequest(query, limit, effectiveResponseMode);
 
         long startNs = System.nanoTime();
 
@@ -254,18 +269,14 @@ public class OpenSearchService implements SearchEngineClient {
     /**
      * EXTRACTED_DOCUMENT arama isteği.
      */
-    private Map<String, Object> createExtractedSearchRequest(String query, int limit) {
+    private Map<String, Object> createExtractedSearchRequest(
+            String query,
+            int limit,
+            ResponseMode responseMode
+    ) {
         return Map.of(
                 "size", limit,
-                "_source", List.of(
-                        "id",
-                        "databaseId",
-                        "workflowCode",
-                        "workflowName",
-                        "status",
-                        "domain",
-                        "xmlSizeKb"
-                ),
+                "_source", sourceFields(responseMode),
                 "query", Map.of(
                         "bool", Map.of(
                                 "must", List.of(
@@ -297,18 +308,14 @@ public class OpenSearchService implements SearchEngineClient {
     /**
      * RAW_XML arama isteği.
      */
-    private Map<String, Object> createRawXmlSearchRequest(String query, int limit) {
+    private Map<String, Object> createRawXmlSearchRequest(
+            String query,
+            int limit,
+            ResponseMode responseMode
+    ) {
         return Map.of(
                 "size", limit,
-                "_source", List.of(
-                        "id",
-                        "databaseId",
-                        "workflowCode",
-                        "workflowName",
-                        "status",
-                        "domain",
-                        "xmlSizeKb"
-                ),
+                "_source", sourceFields(responseMode),
                 "query", Map.of(
                         "bool", Map.of(
                                 "must", List.of(
@@ -330,6 +337,27 @@ public class OpenSearchService implements SearchEngineClient {
         );
     }
 
+    /**
+     * ResponseMode'a göre OpenSearch _source alanlarını belirler.
+     */
+    private List<String> sourceFields(ResponseMode responseMode) {
+        List<String> fields = new ArrayList<>(List.of(
+                "id",
+                "databaseId",
+                "workflowCode",
+                "workflowName",
+                "status",
+                "domain",
+                "xmlSizeKb"
+        ));
+
+        if (responseMode == ResponseMode.FULL_XML_RESPONSE) {
+            fields.add("xmlContent");
+        }
+
+        return fields;
+    }
+
     private SearchEngineResult parseSearchResponse(String query, long tookMs, String responseBody) {
         try {
             JsonNode root = jsonMapper.readTree(responseBody);
@@ -341,6 +369,10 @@ public class OpenSearchService implements SearchEngineClient {
             for (JsonNode hitNode : hitsNode.path("hits")) {
                 JsonNode source = hitNode.path("_source");
 
+                String xmlContent = readNullableText(source, "xmlContent");
+
+                Integer responseSizeKb = calculateHitResponseSizeKb(source, xmlContent);
+
                 hits.add(new SearchHitDto(
                         hitNode.path("_id").asText(),
                         hitNode.path("_score").asDouble(),
@@ -348,20 +380,62 @@ public class OpenSearchService implements SearchEngineClient {
                         source.path("workflowName").asText(),
                         source.path("status").asText(),
                         source.path("domain").asText(),
-                        source.path("xmlSizeKb").asInt()
+                        source.path("xmlSizeKb").asInt(),
+                        xmlContent,
+                        responseSizeKb
                 ));
             }
+
+            int totalResponseSizeKb = hits.stream()
+                    .map(SearchHitDto::responseSizeKb)
+                    .filter(Objects::nonNull)
+                    .mapToInt(Integer::intValue)
+                    .sum();
 
             return new SearchEngineResult(
                     ENGINE_NAME,
                     query,
                     tookMs,
                     totalHits,
+                    totalResponseSizeKb,
                     hits
             );
         } catch (Exception exception) {
             throw new IllegalStateException("OpenSearch search response parse edilemedi.", exception);
         }
+    }
+
+    private String readNullableText(JsonNode source, String fieldName) {
+        JsonNode valueNode = source.path(fieldName);
+
+        if (valueNode.isMissingNode() || valueNode.isNull()) {
+            return null;
+        }
+
+        String value = valueNode.asText();
+
+        return value.isBlank() ? null : value;
+    }
+
+    private Integer calculateHitResponseSizeKb(JsonNode source, String xmlContent) {
+        String approximatePayload = source.path("id").asText()
+                + source.path("databaseId").asText()
+                + source.path("workflowCode").asText()
+                + source.path("workflowName").asText()
+                + source.path("status").asText()
+                + source.path("domain").asText()
+                + source.path("xmlSizeKb").asText()
+                + (xmlContent == null ? "" : xmlContent);
+
+        return calculateSizeKb(approximatePayload);
+    }
+
+    private Integer calculateSizeKb(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+
+        return value.getBytes(StandardCharsets.UTF_8).length / 1024;
     }
 
     private Map<String, Object> textField() {
