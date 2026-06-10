@@ -1,8 +1,10 @@
 package com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.controller;
 
+import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model.BenchmarkExportResponse;
 import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model.BenchmarkReindexResponse;
 import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model.BenchmarkRunRequest;
 import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.model.BenchmarkRunResponse;
+import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.service.BenchmarkExportService;
 import com.recepoztrk.xmlworkflowsearchbenchmark.benchmark.service.BenchmarkService;
 import com.recepoztrk.xmlworkflowsearchbenchmark.search.model.SearchMode;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import java.util.List;
 public class BenchmarkController {
 
     private final BenchmarkService benchmarkService;
+    private final BenchmarkExportService benchmarkExportService;
 
     /**
      * Sisteme kayıtlı search engine'leri listeler.
@@ -52,5 +55,18 @@ public class BenchmarkController {
             @RequestBody(required = false) BenchmarkRunRequest request
     ) {
         return benchmarkService.runBenchmark(request);
+    }
+
+    /**
+     * Benchmark çalıştırır ve sonucu JSON + CSV olarak dışa aktarır.
+     *
+     * POST /api/benchmark/run-and-export
+     */
+    @PostMapping("/run-and-export")
+    public BenchmarkExportResponse runBenchmarkAndExport(
+            @RequestBody(required = false) BenchmarkRunRequest request
+    ) {
+        BenchmarkRunResponse benchmarkResult = benchmarkService.runBenchmark(request);
+        return benchmarkExportService.export(benchmarkResult);
     }
 }

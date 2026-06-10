@@ -1,0 +1,3 @@
+engine,query,searchMode,responseMode,limit,warmupIterations,measurementIterations,successCount,errorCount,lastHitCount,lastResponseSizeKb,avgMs,minMs,maxMs,p50Ms,p95Ms,p99Ms,lastErrorMessage
+elasticsearch,fatura itiraz,RAW_XML,METADATA_ONLY,5,2,5,5,0,100,0,15.8,15,17,15.0,17.0,17.0,
+solr,fatura itiraz,RAW_XML,METADATA_ONLY,5,2,5,5,0,100,0,0.4,0,1,0.0,1.0,1.0,
