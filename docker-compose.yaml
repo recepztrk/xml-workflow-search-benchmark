@@ -30,7 +30,7 @@ services:
       - discovery.type=single-node
       - DISABLE_SECURITY_PLUGIN=true
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=Admin123!
-      - OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g
+      - OPENSEARCH_JAVA_OPTS=-Xms4g -Xmx4g
     ports:
       - "9200:9200"
     volumes:
